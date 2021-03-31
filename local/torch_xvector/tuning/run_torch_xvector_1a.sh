@@ -72,11 +72,16 @@ fi
 
 # STAGE 7: PYTORCH TESTING
 if [ $stage -le 7 ]; then
-  local/torch_xvector/pytorch_testing.py \
-    --stage $stage \
-    --data $data \
-    --nnet-dir $nnet_dir \
-    --egs-dir $egs_dir
+  CUDA_VISIBLE_DEVICES=0 python -m torch.distributed.launch --nproc_per_node=1 \
+    local/torch_xvector/train.py \
+      --stage $stage \
+      --data $data \
+      --nnet-dir $nnet_dir \
+      --egs-dir $egs_dir \
+      $egs_dir
+
+  # update model directory to latest one
+  modelDir=models/`ls -t | head -n1`
 fi
 
 # if [ $stage -le 7 ]; then

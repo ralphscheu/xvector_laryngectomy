@@ -4,3 +4,4 @@ mfcc/
 .venv/
 __pycache__/
 exp/
+*tar

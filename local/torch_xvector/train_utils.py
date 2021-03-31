@@ -463,7 +463,7 @@ def computeValidAccuracy(args, modelDir):
     net.eval()
 
     correct, incorrect = 0, 0
-    for validArk in glob.glob(args.featDir+'/valid_egs.*.ark'):
+    for validArk in glob.glob(args.egs_dir+'/valid_egs.*.ark'):
         x = kaldi_python_io.Nnet3EgsReader(validArk)
         for key, mat in x:
             out = net(x=torch.Tensor(mat[0]['matrix']).permute(1,0).unsqueeze(0).cuda(),eps=0)
