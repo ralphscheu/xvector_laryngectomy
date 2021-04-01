@@ -92,12 +92,6 @@ def main():
     criterion = nn.CrossEntropyLoss()
     eps = args.noiseEps
 
-
-    # scp_reader = ScriptReader(f"{args.data}/feats.scp")
-    # for key, mat in scp_reader:
-    #     print(f"{key}: {mat.shape}")
-
-
     # TRAINING
     while step < totalSteps:
 

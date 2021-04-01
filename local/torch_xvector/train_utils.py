@@ -488,7 +488,7 @@ def par_core_extractXvectors(inFeatsScp, outXvecArk, outXvecScp, net, layerName)
         return hook
     eval('net.%s.register_forward_hook(get_activation(layerName))' %layerName)
 
-    with kaldi_python_io.ArchiveWriter(outXvecArk, outXvecScp, matrix=False) as writer:
+    with kaldi_python_io.ArchiveWriter(outXvecArk, outXvecScp) as writer:
         with ReadHelper('scp:%s'%inFeatsScp) as reader:
             for key, mat in reader:
                 out = net(x=torch.Tensor(mat).permute(1,0).unsqueeze(0).cuda(),

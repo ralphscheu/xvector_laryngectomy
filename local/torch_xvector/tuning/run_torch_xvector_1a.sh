@@ -22,6 +22,14 @@ data=data/train
 nnet_dir=exp/xvector_nnet_1a/
 egs_dir=exp/xvector_nnet_1a/egs
 
+trainFeatDir=data/train_combined_no_sil
+trainXvecDir=xvectors/torch_xvector_1a/train
+testFeatDir=data/voxceleb1_test
+testXvecDir=xvectors/torch_xvector_1a/test
+
+cuda_device_id=0
+
+
 . ./path.sh
 . ./cmd.sh
 . ./utils/parse_options.sh
@@ -55,7 +63,7 @@ num_pdfs=$(awk '{print $2}' $data/utt2spk | sort | uniq -c | wc -l)
 # number of examples per archive.
 if [ $stage -le 6 ]; then
   echo "$0: Getting neural network training egs";
-  # dump egs.
+  # Dump egs
   sid/nnet3/xvector/get_egs.sh --cmd "$train_cmd" \
     --nj 8 \
     --stage 0 \
@@ -66,105 +74,72 @@ if [ $stage -le 6 ]; then
     --num-diagnostic-archives 3 \
     --num-repeats 50 \
     "$data" $egs_dir
-fi
 
-
-
-# STAGE 7: PYTORCH TESTING
-if [ $stage -le 7 ]; then
-  CUDA_VISIBLE_DEVICES=0 python -m torch.distributed.launch --nproc_per_node=1 \
+  # Train the model
+  CUDA_VISIBLE_DEVICES=$cuda_device_id python -m torch.distributed.launch --nproc_per_node=1 \
     local/torch_xvector/train.py \
       --stage $stage \
-      --data $data \
       --nnet-dir $nnet_dir \
       --egs-dir $egs_dir \
       $egs_dir
 
-  # update model directory to latest one
   modelDir=models/`ls -t | head -n1`
 fi
 
-# if [ $stage -le 7 ]; then
-#   echo "$0: creating neural net configs using the xconfig parser";
-#   num_targets=$(wc -w $egs_dir/pdf2num | awk '{print $1}')
-#   feat_dim=$(cat $egs_dir/info/feat_dim)
+# STAGE 7: Extract X-Vectors
+if [ $stage -le 7 ]; then
+  modelDir=models/`ls models/ -t | head -n1`
 
-#   # This chunk-size corresponds to the maximum number of frames the
-#   # stats layer is able to pool over.  In this script, it corresponds
-#   # to 100 seconds.  If the input recording is greater than 100 seconds,
-#   # we will compute multiple xvectors from the same recording and average
-#   # to produce the final xvector.
-#   max_chunk_size=10000
+  # echo python local/torch_xvector/extract.py $modelDir $trainFeatDir $trainXvecDir
+  # CUDA_VISIBLE_DEVICES=$cuda_device_id python local/torch_xvector/extract.py $modelDir $trainFeatDir $trainXvecDir
 
-#   # The smallest number of frames we're comfortable computing an xvector from.
-#   # Note that the hard minimum is given by the left and right context of the
-#   # frame-level layers.
-#   min_chunk_size=25
-#   mkdir -p $nnet_dir/configs
-#   cat <<EOF > $nnet_dir/configs/network.xconfig
-#   # please note that it is important to have input layer with the name=input
-
-#   # The frame-level layers
-#   input dim=${feat_dim} name=input
-#   relu-batchnorm-layer name=tdnn1 input=Append(-2,-1,0,1,2) dim=512
-#   relu-batchnorm-layer name=tdnn2 input=Append(-2,0,2) dim=512
-#   relu-batchnorm-layer name=tdnn3 input=Append(-3,0,3) dim=512
-#   relu-batchnorm-layer name=tdnn4 dim=512
-#   relu-batchnorm-layer name=tdnn5 dim=1500
-
-#   # The stats pooling layer. Layers after this are segment-level.
-#   # In the config below, the first and last argument (0, and ${max_chunk_size})
-#   # means that we pool over an input segment starting at frame 0
-#   # and ending at frame ${max_chunk_size} or earlier.  The other arguments (1:1)
-#   # mean that no subsampling is performed.
-#   stats-layer name=stats config=mean+stddev(0:1:1:${max_chunk_size})
-
-#   # This is where we usually extract the embedding (aka xvector) from.
-#   relu-batchnorm-layer name=tdnn6 dim=512 input=stats
-
-#   # This is where another layer the embedding could be extracted
-#   # from, but usually the previous one works better.
-#   relu-batchnorm-layer name=tdnn7 dim=512
-#   output-layer name=output include-log-softmax=true dim=${num_targets}
-# EOF
-
-#   steps/nnet3/xconfig_to_configs.py \
-#       --xconfig-file $nnet_dir/configs/network.xconfig \
-#       --config-dir $nnet_dir/configs/
-#   cp $nnet_dir/configs/final.config $nnet_dir/nnet.config
-
-#   # These three files will be used by sid/nnet3/xvector/extract_xvectors.sh
-#   echo "output-node name=output input=tdnn6.affine" > $nnet_dir/extract.config
-#   echo "$max_chunk_size" > $nnet_dir/max_chunk_size
-#   echo "$min_chunk_size" > $nnet_dir/min_chunk_size
-# fi
+  echo python local/torch_xvector/extract.py $modelDir $testFeatDir $testXvecDir
+  python local/torch_xvector/extract.py $modelDir $testFeatDir $testXvecDir
+fi
 
 dropout_schedule='0,0@0.20,0.1@0.50,0'
 srand=123
 
-# STAGE 8: TRAIN MODEL
-
+# # STAGE 8: 
 # if [ $stage -le 8 ]; then
-#   steps/nnet3/train_raw_dnn.py --stage=$train_stage \
-#     --cmd="$train_cmd" \
-#     --trainer.optimization.proportional-shrink 10 \
-#     --trainer.optimization.momentum=0.5 \
-#     --trainer.optimization.num-jobs-initial=3 \
-#     --trainer.optimization.num-jobs-final=6 \
-#     --trainer.optimization.initial-effective-lrate=0.001 \
-#     --trainer.optimization.final-effective-lrate=0.0001 \
-#     --trainer.optimization.minibatch-size=64 \
-#     --trainer.srand=$srand \
-#     --trainer.max-param-change=2 \
-#     --trainer.num-epochs=3 \
-#     --trainer.dropout-schedule="$dropout_schedule" \
-#     --trainer.shuffle-buffer-size=1000 \
-#     --egs.frames-per-eg=1 \
-#     --egs.dir="$egs_dir" \
-#     --cleanup.remove-egs $remove_egs \
-#     --cleanup.preserve-model-interval=10 \
-#     --use-gpu=true \
-#     --dir=$nnet_dir  || exit 1;
+#   # Reproducing voxceleb results
+#   # Compute the mean vector for centering the evaluation xvectors.
+#   $train_cmd $trainXvecDir/log/compute_mean.log \
+#     ivector-mean scp:$trainXvecDir/xvector.scp \
+#     $trainXvecDir/mean.vec
+
+#   # This script uses LDA to decrease the dimensionality prior to PLDA.
+#   lda_dim=200
+#   $train_cmd $trainXvecDir/log/lda.log \
+#     ivector-compute-lda --total-covariance-factor=0.0 --dim=$lda_dim \
+#     "ark:ivector-subtract-global-mean scp:$trainXvecDir/xvector.scp ark:- |" \
+#     ark:$trainFeatDir/utt2spk $trainXvecDir/transform.mat
+
+#   # Train the PLDA model.
+#   $train_cmd $trainXvecDir/log/plda.log \
+#     ivector-compute-plda ark:$trainFeatDir/spk2utt \
+#     "ark:ivector-subtract-global-mean scp:$trainXvecDir/xvector.scp ark:- | transform-vec $trainXvecDir/transform.mat ark:- ark:- | ivector-normalize-length ark:-  ark:- |" \
+#     $trainXvecDir/plda
+
 # fi
+
+# if [ $stage -le 9 ]; then
+
+#   $train_cmd $testXvecDir/log/voxceleb1_test_scoring.log \
+#     ivector-plda-scoring --normalize-length=true \
+#     "ivector-copy-plda --smoothing=0.0 $trainXvecDir/plda - |" \
+#     "ark:ivector-subtract-global-mean $trainXvecDir/mean.vec scp:$testXvecDir/xvector.scp ark:- | transform-vec $trainXvecDir/transform.mat ark:- ark:- | ivector-normalize-length ark:- ark:- |" \
+#     "ark:ivector-subtract-global-mean $trainXvecDir/mean.vec scp:$testXvecDir/xvector.scp ark:- | transform-vec $trainXvecDir/transform.mat ark:- ark:- | ivector-normalize-length ark:- ark:- |" \
+#     "cat '$voxceleb1_trials' | cut -d\  --fields=1,2 |" $testXvecDir/scores_voxceleb1_test
+
+#   eer=`compute-eer <(local/prepare_for_eer.py $voxceleb1_trials $testXvecDir/scores_voxceleb1_test) 2> /dev/null`
+#   mindcf1=`sid/compute_min_dcf.py --p-target 0.01 $testXvecDir/scores_voxceleb1_test $voxceleb1_trials 2> /dev/null`
+#   mindcf2=`sid/compute_min_dcf.py --p-target 0.001 $testXvecDir/scores_voxceleb1_test $voxceleb1_trials 2> /dev/null`
+#   echo "EER: $eer%"
+#   echo "minDCF(p-target=0.01): $mindcf1"
+#   echo "minDCF(p-target=0.001): $mindcf2"
+
+# fi
+
 
 exit 0;

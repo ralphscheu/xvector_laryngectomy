@@ -159,15 +159,18 @@ if [ $stage -le 5 ]; then
   utils/fix_data_dir.sh data/train_combined_no_sil
 fi
 
-# Stages 6 through 8 are handled in run_attxv.sh
+# Stages 6 through 8 are handled in run_torch_xvector.sh
 local/torch_xvector/run_torch_xvector.sh --stage $stage \
   --data data/train_combined_no_sil \
   --nnet-dir $nnet_dir \
   --egs-dir $nnet_dir/egs
 
-# local/nnet3/xvector/run_xvector.sh --stage $stage --train-stage -1 \
-#   --data data/train_combined_no_sil --nnet-dir $nnet_dir \
-#   --egs-dir $nnet_dir/egs
+
+
+
+
+
+
 
 # if [ $stage -le 9 ]; then
 #   # Extract x-vectors for centering, LDA, and PLDA training.
