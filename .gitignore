@@ -5,3 +5,4 @@ mfcc/
 __pycache__/
 exp/
 *tar
+xvectors/

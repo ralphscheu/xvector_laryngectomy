@@ -15,8 +15,6 @@ mfccdir=`pwd`/mfcc
 vaddir=`pwd`/mfcc
 
 
-# The trials file is downloaded by local/make_voxceleb1_v2.pl.
-voxceleb1_trials=data/voxceleb1_test/trials
 voxceleb1_root=/mnt/md0/data/VoxCeleb1
 voxceleb2_root=/mnt/md0/data/VoxCeleb2
 nnet_dir=exp/torch_xvector_1a
@@ -164,12 +162,6 @@ local/torch_xvector/run_torch_xvector.sh --stage $stage \
   --data data/train_combined_no_sil \
   --nnet-dir $nnet_dir \
   --egs-dir $nnet_dir/egs
-
-
-
-
-
-
 
 
 # if [ $stage -le 9 ]; then

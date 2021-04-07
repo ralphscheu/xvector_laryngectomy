@@ -27,6 +27,10 @@ trainXvecDir=xvectors/torch_xvector_1a/train
 testFeatDir=data/voxceleb1_test
 testXvecDir=xvectors/torch_xvector_1a/test
 
+
+# The trials file is downloaded by local/make_voxceleb1_v2.pl.
+voxceleb1_trials=data/voxceleb1_test/trials
+
 cuda_device_id=0
 
 
@@ -100,46 +104,47 @@ fi
 dropout_schedule='0,0@0.20,0.1@0.50,0'
 srand=123
 
-# # STAGE 8: 
-# if [ $stage -le 8 ]; then
-#   # Reproducing voxceleb results
-#   # Compute the mean vector for centering the evaluation xvectors.
-#   $train_cmd $trainXvecDir/log/compute_mean.log \
-#     ivector-mean scp:$trainXvecDir/xvector.scp \
-#     $trainXvecDir/mean.vec
+# STAGE 8: 
+if [ $stage -le 8 ]; then
 
-#   # This script uses LDA to decrease the dimensionality prior to PLDA.
-#   lda_dim=200
-#   $train_cmd $trainXvecDir/log/lda.log \
-#     ivector-compute-lda --total-covariance-factor=0.0 --dim=$lda_dim \
-#     "ark:ivector-subtract-global-mean scp:$trainXvecDir/xvector.scp ark:- |" \
-#     ark:$trainFeatDir/utt2spk $trainXvecDir/transform.mat
+  # Reproducing voxceleb results
+  # Compute the mean vector for centering the evaluation xvectors.
+  $train_cmd $trainXvecDir/log/compute_mean.log \
+    ivector-mean scp:$trainXvecDir/xvector.scp \
+    $trainXvecDir/mean.vec
 
-#   # Train the PLDA model.
-#   $train_cmd $trainXvecDir/log/plda.log \
-#     ivector-compute-plda ark:$trainFeatDir/spk2utt \
-#     "ark:ivector-subtract-global-mean scp:$trainXvecDir/xvector.scp ark:- | transform-vec $trainXvecDir/transform.mat ark:- ark:- | ivector-normalize-length ark:-  ark:- |" \
-#     $trainXvecDir/plda
+  # This script uses LDA to decrease the dimensionality prior to PLDA.
+  lda_dim=200
+  $train_cmd $trainXvecDir/log/lda.log \
+    ivector-compute-lda --total-covariance-factor=0.0 --dim=$lda_dim \
+    "ark:ivector-subtract-global-mean scp:$trainXvecDir/xvector.scp ark:- |" \
+    ark:$trainFeatDir/utt2spk $trainXvecDir/transform.mat
 
-# fi
+  # Train the PLDA model.
+  $train_cmd $trainXvecDir/log/plda.log \
+    ivector-compute-plda ark:$trainFeatDir/spk2utt \
+    "ark:ivector-subtract-global-mean scp:$trainXvecDir/xvector.scp ark:- | transform-vec $trainXvecDir/transform.mat ark:- ark:- | ivector-normalize-length ark:-  ark:- |" \
+    $trainXvecDir/plda
 
-# if [ $stage -le 9 ]; then
+fi
 
-#   $train_cmd $testXvecDir/log/voxceleb1_test_scoring.log \
-#     ivector-plda-scoring --normalize-length=true \
-#     "ivector-copy-plda --smoothing=0.0 $trainXvecDir/plda - |" \
-#     "ark:ivector-subtract-global-mean $trainXvecDir/mean.vec scp:$testXvecDir/xvector.scp ark:- | transform-vec $trainXvecDir/transform.mat ark:- ark:- | ivector-normalize-length ark:- ark:- |" \
-#     "ark:ivector-subtract-global-mean $trainXvecDir/mean.vec scp:$testXvecDir/xvector.scp ark:- | transform-vec $trainXvecDir/transform.mat ark:- ark:- | ivector-normalize-length ark:- ark:- |" \
-#     "cat '$voxceleb1_trials' | cut -d\  --fields=1,2 |" $testXvecDir/scores_voxceleb1_test
+if [ $stage -le 9 ]; then
 
-#   eer=`compute-eer <(local/prepare_for_eer.py $voxceleb1_trials $testXvecDir/scores_voxceleb1_test) 2> /dev/null`
-#   mindcf1=`sid/compute_min_dcf.py --p-target 0.01 $testXvecDir/scores_voxceleb1_test $voxceleb1_trials 2> /dev/null`
-#   mindcf2=`sid/compute_min_dcf.py --p-target 0.001 $testXvecDir/scores_voxceleb1_test $voxceleb1_trials 2> /dev/null`
-#   echo "EER: $eer%"
-#   echo "minDCF(p-target=0.01): $mindcf1"
-#   echo "minDCF(p-target=0.001): $mindcf2"
+  $train_cmd $testXvecDir/log/voxceleb1_test_scoring.log \
+    ivector-plda-scoring --normalize-length=true \
+    "ivector-copy-plda --smoothing=0.0 $trainXvecDir/plda - |" \
+    "ark:ivector-subtract-global-mean $trainXvecDir/mean.vec scp:$testXvecDir/xvector.scp ark:- | transform-vec $trainXvecDir/transform.mat ark:- ark:- | ivector-normalize-length ark:- ark:- |" \
+    "ark:ivector-subtract-global-mean $trainXvecDir/mean.vec scp:$testXvecDir/xvector.scp ark:- | transform-vec $trainXvecDir/transform.mat ark:- ark:- | ivector-normalize-length ark:- ark:- |" \
+    "cat '$voxceleb1_trials' | cut -d\  --fields=1,2 |" $testXvecDir/scores_voxceleb1_test
 
-# fi
+  eer=`compute-eer <(local/prepare_for_eer.py $voxceleb1_trials $testXvecDir/scores_voxceleb1_test) 2> /dev/null`
+  mindcf1=`sid/compute_min_dcf.py --p-target 0.01 $testXvecDir/scores_voxceleb1_test $voxceleb1_trials 2> /dev/null`
+  mindcf2=`sid/compute_min_dcf.py --p-target 0.001 $testXvecDir/scores_voxceleb1_test $voxceleb1_trials 2> /dev/null`
+  echo "EER: $eer%"
+  echo "minDCF(p-target=0.01): $mindcf1"
+  echo "minDCF(p-target=0.001): $mindcf2"
+
+fi
 
 
 exit 0;
