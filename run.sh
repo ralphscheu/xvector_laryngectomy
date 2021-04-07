@@ -20,6 +20,28 @@ voxceleb2_root=/mnt/md0/data/VoxCeleb2
 nnet_dir=exp/torch_xvector_1a
 musan_root=/mnt/md0/data/musan
 
+
+########
+
+train_stage=0
+use_gpu=true
+remove_egs=false
+
+nnet_dir=exp/xvector_nnet_1a/
+
+trainFeatDir=data/train_combined_no_sil
+trainXvecDir=xvectors/torch_xvector_1a/train
+testFeatDir=data/voxceleb1_test
+testXvecDir=xvectors/torch_xvector_1a/test
+# The trials file is downloaded by local/make_voxceleb1_v2.pl.
+voxceleb1_trials=data/voxceleb1_test/trials
+
+cuda_device_id=0
+
+num_pdfs=$(awk '{print $2}' $trainFeatDir/utt2spk | sort | uniq -c | wc -l)
+
+###############
+
 stage=7
 
 . ./utils/parse_options.sh
@@ -127,7 +149,7 @@ if [ $stage -le 4 ]; then
   # This script applies CMVN and removes nonspeech frames.  Note that this is somewhat
   # wasteful, as it roughly doubles the amount of training data on disk.  After
   # creating training examples, this can be removed.
-  local/nnet3/xvector/prepare_feats_for_egs.sh --nj 40 --cmd "$train_cmd" \
+  local/torch_xvector/prepare_feats_for_egs.sh --nj 40 --cmd "$train_cmd" \
     data/train_combined data/train_combined_no_sil exp/train_combined_no_sil
   utils/fix_data_dir.sh data/train_combined_no_sil
 fi
@@ -157,68 +179,124 @@ if [ $stage -le 5 ]; then
   utils/fix_data_dir.sh data/train_combined_no_sil
 fi
 
-# Stages 6 through 8 are handled in run_torch_xvector.sh
-local/torch_xvector/run_torch_xvector.sh --stage $stage \
-  --data data/train_combined_no_sil \
-  --nnet-dir $nnet_dir \
-  --egs-dir $nnet_dir/egs
+
+# STAGE 6: DUMP EXAMPLES (EGS)
+
+# Now we create the nnet examples using sid/nnet3/xvector/get_egs.sh.
+# The argument --num-repeats is related to the number of times a speaker
+# repeats per archive.  If it seems like you're getting too many archives
+# (e.g., more than 200) try increasing the --frames-per-iter option.  The
+# arguments --min-frames-per-chunk and --max-frames-per-chunk specify the
+# minimum and maximum length (in terms of number of frames) of the features
+# in the examples.
+#
+# To make sense of the egs script, it may be necessary to put an "exit 1"
+# command immediately after stage 3.  Then, inspect
+# exp/<your-dir>/egs/temp/ranges.* . The ranges files specify the examples that
+# will be created, and which archives they will be stored in.  Each line of
+# ranges.* has the following form:
+#    <utt-id> <local-ark-indx> <global-ark-indx> <start-frame> <end-frame> <spk-id>
+# For example:
+#    100304-f-sre2006-kacg-A 1 2 4079 881 23
+
+# If you're satisfied with the number of archives (e.g., 50-150 archives is
+# reasonable) and with the number of examples per speaker (e.g., 1000-5000
+# is reasonable) then you can let the script continue to the later stages.
+# Otherwise, try increasing or decreasing the --num-repeats option.  You might
+# need to fiddle with --frames-per-iter.  Increasing this value decreases the
+# the number of archives and increases the number of examples per archive.
+# Decreasing this value increases the number of archives, while decreasing the
+# number of examples per archive.
+if [ $stage -le 6 ]; then
+
+  echo "$0: Getting neural network training egs";
+  # Dump egs
+  sid/nnet3/xvector/get_egs.sh --cmd "$train_cmd" \
+    --nj 8 \
+    --stage 0 \
+    --frames-per-iter 1000000000 \
+    --frames-per-iter-diagnostic 100000 \
+    --min-frames-per-chunk 200 \
+    --max-frames-per-chunk 400 \
+    --num-diagnostic-archives 3 \
+    --num-repeats 50 \
+    "$trainFeatDir" $nnet_dir/egs
+
+fi
 
 
-# if [ $stage -le 9 ]; then
-#   # Extract x-vectors for centering, LDA, and PLDA training.
-#   sid/nnet3/xvector/extract_xvectors.sh --cmd "$train_cmd --mem 4G" --nj 80 \
-#     $nnet_dir data/train \
-#     $nnet_dir/xvectors_train
+# STAGE 7: Train the model
+if [ $stage -le 7 ]; then
 
-#   # Extract x-vectors used in the evaluation.
-#   sid/nnet3/xvector/extract_xvectors.sh --cmd "$train_cmd --mem 4G" --nj 40 \
-#     $nnet_dir data/voxceleb1_test \
-#     $nnet_dir/xvectors_voxceleb1_test
-# fi
+  CUDA_VISIBLE_DEVICES=$cuda_device_id python -m torch.distributed.launch --nproc_per_node=1 \
+    local/torch_xvector/train.py \
+      --stage $stage \
+      --nnet-dir $nnet_dir \
+      --egs-dir $nnet_dir/egs \
+      $nnet_dir/egs
 
-# if [ $stage -le 10 ]; then
-#   # Compute the mean vector for centering the evaluation xvectors.
-#   $train_cmd $nnet_dir/xvectors_train/log/compute_mean.log \
-#     ivector-mean scp:$nnet_dir/xvectors_train/xvector.scp \
-#     $nnet_dir/xvectors_train/mean.vec || exit 1;
+fi
 
-#   # This script uses LDA to decrease the dimensionality prior to PLDA.
-#   lda_dim=200
-#   $train_cmd $nnet_dir/xvectors_train/log/lda.log \
-#     ivector-compute-lda --total-covariance-factor=0.0 --dim=$lda_dim \
-#     "ark:ivector-subtract-global-mean scp:$nnet_dir/xvectors_train/xvector.scp ark:- |" \
-#     ark:data/train/utt2spk $nnet_dir/xvectors_train/transform.mat || exit 1;
 
-#   # Train the PLDA model.
-#   $train_cmd $nnet_dir/xvectors_train/log/plda.log \
-#     ivector-compute-plda ark:data/train/spk2utt \
-#     "ark:ivector-subtract-global-mean scp:$nnet_dir/xvectors_train/xvector.scp ark:- | transform-vec $nnet_dir/xvectors_train/transform.mat ark:- ark:- | ivector-normalize-length ark:-  ark:- |" \
-#     $nnet_dir/xvectors_train/plda || exit 1;
-# fi
+# STAGE 8: Extract X-Vectors
+if [ $stage -le 8 ]; then
+  modelDir=models/`ls models/ -t | head -n1`
 
-# if [ $stage -le 11 ]; then
-#   $train_cmd exp/scores/log/voxceleb1_test_scoring.log \
-#     ivector-plda-scoring --normalize-length=true \
-#     "ivector-copy-plda --smoothing=0.0 $nnet_dir/xvectors_train/plda - |" \
-#     "ark:ivector-subtract-global-mean $nnet_dir/xvectors_train/mean.vec scp:$nnet_dir/xvectors_voxceleb1_test/xvector.scp ark:- | transform-vec $nnet_dir/xvectors_train/transform.mat ark:- ark:- | ivector-normalize-length ark:- ark:- |" \
-#     "ark:ivector-subtract-global-mean $nnet_dir/xvectors_train/mean.vec scp:$nnet_dir/xvectors_voxceleb1_test/xvector.scp ark:- | transform-vec $nnet_dir/xvectors_train/transform.mat ark:- ark:- | ivector-normalize-length ark:- ark:- |" \
-#     "cat '$voxceleb1_trials' | cut -d\  --fields=1,2 |" exp/scores_voxceleb1_test || exit 1;
-# fi
+  echo python local/torch_xvector/extract.py $modelDir $trainFeatDir $trainXvecDir
+  CUDA_VISIBLE_DEVICES=$cuda_device_id python local/torch_xvector/extract.py $modelDir $trainFeatDir $trainXvecDir
 
-# if [ $stage -le 12 ]; then
-#   eer=`compute-eer <(local/prepare_for_eer.py $voxceleb1_trials exp/scores_voxceleb1_test) 2> /dev/null`
-#   mindcf1=`sid/compute_min_dcf.py --p-target 0.01 exp/scores_voxceleb1_test $voxceleb1_trials 2> /dev/null`
-#   mindcf2=`sid/compute_min_dcf.py --p-target 0.001 exp/scores_voxceleb1_test $voxceleb1_trials 2> /dev/null`
-#   echo "EER: $eer%"
-#   echo "minDCF(p-target=0.01): $mindcf1"
-#   echo "minDCF(p-target=0.001): $mindcf2"
-#   echo "compute-eer <(local/prepare_for_eer.py $voxceleb1_trials exp/scores_voxceleb1_test) " 
-#   # EER: 3.128%
-#   # minDCF(p-target=0.01): 0.3258
-#   # minDCF(p-target=0.001): 0.5003
-#   #
-#   # For reference, here's the ivector system from ../v1:
-#   # EER: 5.329%
-#   # minDCF(p-target=0.01): 0.4933
-#   # minDCF(p-target=0.001): 0.6168
-# fi
+  echo python local/torch_xvector/extract.py $modelDir $testFeatDir $testXvecDir
+  python local/torch_xvector/extract.py $modelDir $testFeatDir $testXvecDir
+fi
+
+
+dropout_schedule='0,0@0.20,0.1@0.50,0'
+srand=123
+
+
+# STAGE 9: COMPUTE MEAN VECTORS, TRAIN PLDA MODEL
+if [ $stage -le 9 ]; then
+
+  # Reproducing voxceleb results
+  # Compute the mean vector for centering the evaluation xvectors.
+  $train_cmd $trainXvecDir/log/compute_mean.log \
+    ivector-mean scp:$trainXvecDir/xvector.scp \
+    $trainXvecDir/mean.vec
+
+  # This script uses LDA to decrease the dimensionality prior to PLDA.
+  lda_dim=200
+  $train_cmd $trainXvecDir/log/lda.log \
+    ivector-compute-lda --total-covariance-factor=0.0 --dim=$lda_dim \
+    "ark:ivector-subtract-global-mean scp:$trainXvecDir/xvector.scp ark:- |" \
+    ark:$trainFeatDir/utt2spk $trainXvecDir/transform.mat
+
+  # Train the PLDA model.
+  $train_cmd $trainXvecDir/log/plda.log \
+    ivector-compute-plda ark:$trainFeatDir/spk2utt \
+    "ark:ivector-subtract-global-mean scp:$trainXvecDir/xvector.scp ark:- | transform-vec $trainXvecDir/transform.mat ark:- ark:- | ivector-normalize-length ark:-  ark:- |" \
+    $trainXvecDir/plda
+
+fi
+
+
+# STAGE 10: COMPUTE SCORES
+if [ $stage -le 10 ]; then
+
+  $train_cmd $testXvecDir/log/voxceleb1_test_scoring.log \
+    ivector-plda-scoring --normalize-length=true \
+    "ivector-copy-plda --smoothing=0.0 $trainXvecDir/plda - |" \
+    "ark:ivector-subtract-global-mean $trainXvecDir/mean.vec scp:$testXvecDir/xvector.scp ark:- | transform-vec $trainXvecDir/transform.mat ark:- ark:- | ivector-normalize-length ark:- ark:- |" \
+    "ark:ivector-subtract-global-mean $trainXvecDir/mean.vec scp:$testXvecDir/xvector.scp ark:- | transform-vec $trainXvecDir/transform.mat ark:- ark:- | ivector-normalize-length ark:- ark:- |" \
+    "cat '$voxceleb1_trials' | cut -d\  --fields=1,2 |" $testXvecDir/scores_voxceleb1_test
+
+  eer=`compute-eer <(local/prepare_for_eer.py $voxceleb1_trials $testXvecDir/scores_voxceleb1_test) 2> /dev/null`
+  mindcf1=`sid/compute_min_dcf.py --p-target 0.01 $testXvecDir/scores_voxceleb1_test $voxceleb1_trials 2> /dev/null`
+  mindcf2=`sid/compute_min_dcf.py --p-target 0.001 $testXvecDir/scores_voxceleb1_test $voxceleb1_trials 2> /dev/null`
+  echo "EER: $eer%"
+  echo "minDCF(p-target=0.01): $mindcf1"
+  echo "minDCF(p-target=0.001): $mindcf2"
+
+fi
+
+
+exit 0;

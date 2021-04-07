@@ -1,1 +1,0 @@
-tuning/run_torch_xvector_1a.sh
