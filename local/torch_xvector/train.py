@@ -19,18 +19,9 @@ from torch.utils.data import DataLoader
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--stage',
-        dest="stage", type=int, default="0",
-        help="stage to start from")
     parser.add_argument('--egs-dir',
         dest="egs_dir",
         help="egs directory")
-    parser.add_argument('--nnet-dir',
-        dest="nnet_dir",
-        help="nnet directory")
-    parser.add_argument('--data',
-        dest="data",
-        help="data directory")
 
     # General Parameters
     parser.add_argument('-modelType', default='xvecTDNN', help='Model class. Check models.py')
@@ -38,7 +29,6 @@ def main():
     parser.add_argument('-trainingMode', default='init',
         help='(init) Train from scratch, (resume) Resume training, (finetune) Finetune a pretrained model')
     parser.add_argument('-resumeModelDir', default=None, help='Path containing training checkpoints')
-    parser.add_argument('featDir', default=None, help='Directory with training archives')
 
     # PyTorch distributed run
     parser.add_argument("--local_rank", type=int, default=0)
