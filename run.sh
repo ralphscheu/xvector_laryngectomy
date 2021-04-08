@@ -79,8 +79,8 @@ if [ $stage -eq 2 ]; then
 
   if [ ! -d "RIRS_NOISES" ]; then
     # Download the package that includes the real RIRs, simulated RIRs, isotropic noises and point-source noises
-    wget --no-check-certificate http://www.openslr.org/resources/28/rirs_noises.zip
-    unzip rirs_noises.zip
+    wget --no-check-certificate http://www.openslr.org/resources/28/rirs_noises.zip -O /tmp/rirs_noises.zip
+    unzip /tmp/rirs_noises.zip
   fi
 
   # Make a version with reverberated speech
