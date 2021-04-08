@@ -113,7 +113,7 @@ class myH5DL_sampler(Dataset):
 
 def prepareModel(args):
 
-    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    device = torch.device("cuda:" + str(args.local_rank) if torch.cuda.is_available() else "cpu")
     torch.distributed.init_process_group(backend='nccl', init_method='env://')
     torch.backends.cudnn.benchmark = True
 
@@ -211,9 +211,11 @@ def prepareModel(args):
                                                      output_device=0)
         if torch.cuda.device_count() > 1:
             print("Using ", torch.cuda.device_count(), "GPUs!")
-            net = nn.DataParallel(net)
+            net = nn.parallel.DistributedDataParallel(net, device_ids=[args.local_rank], output_device=args.local_rank)
+            # TODO: This is not tested on multiple GPUs
+        
         eventID = datetime.now().strftime('%Y%m-%d%H-%M%S')
-        saveDir = './models/modelType_{}_event_{}' .format(args.modelType, eventID)
+        saveDir = './models/modelType_{}_rank_{}_event_{}' .format(args.modelType, args.local_rank, eventID)
         os.makedirs(saveDir)
 
     return net, optimizer, step, saveDir

@@ -33,6 +33,8 @@ voxceleb1_trials=data/voxceleb1_test/trials  # The trials file is downloaded by 
 nnet_name=torch_xvector_1a
 nnet_dir=exp/$nnet_name
 
+# which CUDA device to use (defaults to single gpu)
+nproc=1
 cuda_device_id=0
 
 
@@ -231,9 +233,8 @@ fi
 if [ $stage -eq 7 ]; then
   echo "Stage $stage: Train the model"
 
-  CUDA_VISIBLE_DEVICES=$cuda_device_id python -m torch.distributed.launch --nproc_per_node=1 \
-    local/torch_xvector/train.py \
-      --egs-dir $nnet_dir/egs \
+  CUDA_VISIBLE_DEVICES=$cuda_device_id python -m torch.distributed.launch --nproc_per_node=$nproc \
+    local/torch_xvector/train.py --egs-dir $nnet_dir/egs
 
 fi
 

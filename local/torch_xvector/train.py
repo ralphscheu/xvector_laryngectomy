@@ -55,16 +55,22 @@ def main():
         help='Training iteration when dropout = pDropMax')
 
     args = parser.parse_args()
+    
     print(args)
 
     # SEEDS
     torch.manual_seed(0)
     np.random.seed(0)
-    
+
+    # for multi-gpu training
+    torch.cuda.set_device(args.local_rank)
+    #####
+
     # PREPARE MODEL
     totalSteps = args.numEpochs * args.numArchives
     net, optimizer, step, saveDir = train_utils.prepareModel(args)
-    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    # choose CUDA device from local_rank argument
+    device = torch.device("cuda:" + str(args.local_rank) if torch.cuda.is_available() else "cpu")
     numBatchesPerArk = int(args.numEgsPerArk/args.batchSize)
     
     # LR SCHEDULERS
