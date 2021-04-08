@@ -6,3 +6,5 @@ __pycache__/
 exp/
 *tar
 xvectors/
+mfcc/
+./mfcc
