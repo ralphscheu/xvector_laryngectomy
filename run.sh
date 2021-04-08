@@ -5,49 +5,45 @@
 #             2018   Ewald Enzinger
 # Apache 2.0.
 #
-# See ../README.txt for more info on data required.
+# See ./README.txt for more info on data required.
 # Results (mostly equal error-rates) are inline in comments below.
 
 . ./cmd.sh
 . ./path.sh
 set -e
+
+echo "$0 $@"  # Print the command line for logging.
+
+
+# point to source data
+voxceleb1_root=/mnt/md0/data/VoxCeleb1
+voxceleb2_root=/mnt/md0/data/VoxCeleb2
+musan_root=/mnt/md0/data/musan
+
+# location of mfcc and vad files
 mfccdir=`pwd`/mfcc
 vaddir=`pwd`/mfcc
 
-
-voxceleb1_root=/mnt/md0/data/VoxCeleb1
-voxceleb2_root=/mnt/md0/data/VoxCeleb2
-nnet_dir=exp/torch_xvector_1a
-musan_root=/mnt/md0/data/musan
-
-
-########
-
-train_stage=0
-use_gpu=true
-remove_egs=false
-
-nnet_dir=exp/xvector_nnet_1a/
-
+# configure training and test dataset
 trainFeatDir=data/train_combined_no_sil
 trainXvecDir=xvectors/torch_xvector_1a/train
 testFeatDir=data/voxceleb1_test
-testXvecDir=xvectors/torch_xvector_1a/test
-# The trials file is downloaded by local/make_voxceleb1_v2.pl.
-voxceleb1_trials=data/voxceleb1_test/trials
+voxceleb1_trials=data/voxceleb1_test/trials  # The trials file is downloaded by local/make_voxceleb1_v2.pl.
+
+# configure the model to run
+nnet_name=torch_xvector_1a
+nnet_dir=exp/$nnet_name
 
 cuda_device_id=0
 
 num_pdfs=$(awk '{print $2}' $trainFeatDir/utt2spk | sort | uniq -c | wc -l)
 
-###############
-
-stage=7
+stage=0
 
 . ./utils/parse_options.sh
 
 
-if [ $stage -le 0 ]; then
+if [ $stage -eq 0 ]; then
   local/make_voxceleb2.pl $voxceleb2_root dev data/voxceleb2_train
   local/make_voxceleb2.pl $voxceleb2_root test data/voxceleb2_test
   # This script creates data/voxceleb1_test and data/voxceleb1_train for latest version of VoxCeleb1.
@@ -62,9 +58,9 @@ if [ $stage -le 0 ]; then
 fi
 
 
-if [ $stage -le 1 ]; then
+if [ $stage -eq 1 ]; then
   # Make MFCCs and compute the energy-based VAD for each dataset
-  for name in train ; do # voxceleb1_test; do
+  for name in train voxceleb1_test; do # voxceleb1_test; do
     steps/make_mfcc.sh --write-utt2num-frames true --mfcc-config conf/mfcc.conf --nj 40 --cmd "$train_cmd" \
       data/${name} exp/make_mfcc $mfccdir
     utils/fix_data_dir.sh data/${name}
@@ -74,9 +70,10 @@ if [ $stage -le 1 ]; then
   done
 fi
 
+
 # In this section, we augment the VoxCeleb2 data with reverberation,
 # noise, music, and babble, and combine it with the clean data.
-if [ $stage -le 2 ]; then
+if [ $stage -eq 2 ]; then
   frame_shift=0.01
   awk -v frame_shift=$frame_shift '{print $1, $2*frame_shift;}' data/train/utt2num_frames > data/train/reco2dur
 
@@ -128,7 +125,8 @@ if [ $stage -le 2 ]; then
   utils/combine_data.sh data/train_aug data/train_reverb data/train_noise data/train_music data/train_babble
 fi
 
-if [ $stage -le 3 ]; then
+
+if [ $stage -eq 3 ]; then
   # Take a random subset of the augmentations
   utils/subset_data_dir.sh data/train_aug 1000000 data/train_aug_1m
   utils/fix_data_dir.sh data/train_aug_1m
@@ -144,17 +142,21 @@ if [ $stage -le 3 ]; then
   utils/combine_data.sh data/train_combined data/train_aug_1m data/train
 fi
 
-# Now we prepare the features to generate examples for xvector training.
-if [ $stage -le 4 ]; then
+
+if [ $stage -eq 4 ]; then
+  echo "Stage $stage: Prepare features to generate examples for xvector training"
+
   # This script applies CMVN and removes nonspeech frames.  Note that this is somewhat
   # wasteful, as it roughly doubles the amount of training data on disk.  After
   # creating training examples, this can be removed.
+
   local/torch_xvector/prepare_feats_for_egs.sh --nj 40 --cmd "$train_cmd" \
     data/train_combined data/train_combined_no_sil exp/train_combined_no_sil
   utils/fix_data_dir.sh data/train_combined_no_sil
 fi
 
-if [ $stage -le 5 ]; then
+
+if [ $stage -eq 5 ]; then
   # Now, we need to remove features that are too short after removing silence
   # frames.  We want atleast 5s (500 frames) per utterance.
   min_len=400
@@ -180,7 +182,9 @@ if [ $stage -le 5 ]; then
 fi
 
 
-# STAGE 6: DUMP EXAMPLES (EGS)
+if [ $stage -eq 6 ]; then
+
+  echo "Stage $stage: Getting neural network training egs";
 
 # Now we create the nnet examples using sid/nnet3/xvector/get_egs.sh.
 # The argument --num-repeats is related to the number of times a speaker
@@ -207,10 +211,7 @@ fi
 # the number of archives and increases the number of examples per archive.
 # Decreasing this value increases the number of archives, while decreasing the
 # number of examples per archive.
-if [ $stage -le 6 ]; then
 
-  echo "$0: Getting neural network training egs";
-  # Dump egs
   sid/nnet3/xvector/get_egs.sh --cmd "$train_cmd" \
     --nj 8 \
     --stage 0 \
@@ -225,8 +226,8 @@ if [ $stage -le 6 ]; then
 fi
 
 
-# STAGE 7: Train the model
-if [ $stage -le 7 ]; then
+if [ $stage -eq 7 ]; then
+  echo "Stage $stage: Train the model"
 
   CUDA_VISIBLE_DEVICES=$cuda_device_id python -m torch.distributed.launch --nproc_per_node=1 \
     local/torch_xvector/train.py \
@@ -238,9 +239,14 @@ if [ $stage -le 7 ]; then
 fi
 
 
-# STAGE 8: Extract X-Vectors
-if [ $stage -le 8 ]; then
+trainXvecDir=xvectors/$nnet_name/train
+testXvecDir=xvectors/$nnet_name/test
+
+
+if [ $stage -eq 8 ]; then
   modelDir=models/`ls models/ -t | head -n1`
+
+  echo "Stage $stage: Extract X-Vectors"
 
   echo python local/torch_xvector/extract.py $modelDir $trainFeatDir $trainXvecDir
   CUDA_VISIBLE_DEVICES=$cuda_device_id python local/torch_xvector/extract.py $modelDir $trainFeatDir $trainXvecDir
@@ -255,38 +261,40 @@ srand=123
 
 
 # STAGE 9: COMPUTE MEAN VECTORS, TRAIN PLDA MODEL
-if [ $stage -le 9 ]; then
+if [ $stage -eq 9 ]; then
+  echo "Stage $stage"
 
   # Reproducing voxceleb results
-  # Compute the mean vector for centering the evaluation xvectors.
+  echo "Compute the mean vector for centering the evaluation xvectors..."
   $train_cmd $trainXvecDir/log/compute_mean.log \
     ivector-mean scp:$trainXvecDir/xvector.scp \
     $trainXvecDir/mean.vec
 
   # This script uses LDA to decrease the dimensionality prior to PLDA.
   lda_dim=200
+  echo "Decrease dimensionality using LDA..."
   $train_cmd $trainXvecDir/log/lda.log \
     ivector-compute-lda --total-covariance-factor=0.0 --dim=$lda_dim \
     "ark:ivector-subtract-global-mean scp:$trainXvecDir/xvector.scp ark:- |" \
     ark:$trainFeatDir/utt2spk $trainXvecDir/transform.mat
 
-  # Train the PLDA model.
+  echo "Train the PLDA model..."
   $train_cmd $trainXvecDir/log/plda.log \
     ivector-compute-plda ark:$trainFeatDir/spk2utt \
-    "ark:ivector-subtract-global-mean scp:$trainXvecDir/xvector.scp ark:- | transform-vec $trainXvecDir/transform.mat ark:- ark:- | ivector-normalize-length ark:-  ark:- |" \
+    "ark:ivector-subtract-global-mean scp:$trainXvecDir/xvector.scp ark:- | transform-vec $trainXvecDir/transform.mat ark:- ark:- | ivector-normalize-eqngth ark:-  ark:- |" \
     $trainXvecDir/plda
 
 fi
 
 
-# STAGE 10: COMPUTE SCORES
-if [ $stage -le 10 ]; then
+if [ $stage -eq 10 ]; then
+  echo "Stage $stage: Compute scores"
 
   $train_cmd $testXvecDir/log/voxceleb1_test_scoring.log \
-    ivector-plda-scoring --normalize-length=true \
+    ivector-plda-scoring --normalize-eqngth=true \
     "ivector-copy-plda --smoothing=0.0 $trainXvecDir/plda - |" \
-    "ark:ivector-subtract-global-mean $trainXvecDir/mean.vec scp:$testXvecDir/xvector.scp ark:- | transform-vec $trainXvecDir/transform.mat ark:- ark:- | ivector-normalize-length ark:- ark:- |" \
-    "ark:ivector-subtract-global-mean $trainXvecDir/mean.vec scp:$testXvecDir/xvector.scp ark:- | transform-vec $trainXvecDir/transform.mat ark:- ark:- | ivector-normalize-length ark:- ark:- |" \
+    "ark:ivector-subtract-global-mean $trainXvecDir/mean.vec scp:$testXvecDir/xvector.scp ark:- | transform-vec $trainXvecDir/transform.mat ark:- ark:- | ivector-normalize-eqngth ark:- ark:- |" \
+    "ark:ivector-subtract-global-mean $trainXvecDir/mean.vec scp:$testXvecDir/xvector.scp ark:- | transform-vec $trainXvecDir/transform.mat ark:- ark:- | ivector-normalize-eqngth ark:- ark:- |" \
     "cat '$voxceleb1_trials' | cut -d\  --fields=1,2 |" $testXvecDir/scores_voxceleb1_test
 
   eer=`compute-eer <(local/prepare_for_eer.py $voxceleb1_trials $testXvecDir/scores_voxceleb1_test) 2> /dev/null`
