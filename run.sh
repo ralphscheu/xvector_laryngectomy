@@ -26,8 +26,7 @@ vaddir=`pwd`/mfcc
 
 # configure training and test dataset
 trainFeatDir=data/train_combined_no_sil
-trainXvecDir=xvectors/torch_xvector_1a/train
-testFeatDir=data/voxceleb1_test
+testFeatDir=data/voxceleb1_test_no_sil
 voxceleb1_trials=data/voxceleb1_test/trials  # The trials file is downloaded by local/make_voxceleb1_v2.pl.
 
 # configure the model to run
@@ -36,7 +35,6 @@ nnet_dir=exp/$nnet_name
 
 cuda_device_id=0
 
-num_pdfs=$(awk '{print $2}' $trainFeatDir/utt2spk | sort | uniq -c | wc -l)
 
 stage=0
 
@@ -50,8 +48,6 @@ if [ $stage -eq 0 ]; then
   # Our evaluation set is the test portion of VoxCeleb1.
   local/make_voxceleb1_v2.pl $voxceleb1_root dev data/voxceleb1_train
   local/make_voxceleb1_v2.pl $voxceleb1_root test data/voxceleb1_test
-  # if you downloaded the dataset soon after it was released, you will want to use the make_voxceleb1.pl script instead.
-  # local/make_voxceleb1.pl $voxceleb1_root data
   # We'll train on all of VoxCeleb2, plus the training portion of VoxCeleb1.
   # This should give 7,323 speakers and 1,276,888 utterances.
   utils/combine_data.sh data/train data/voxceleb2_train data/voxceleb2_test data/voxceleb1_train
@@ -153,6 +149,12 @@ if [ $stage -eq 4 ]; then
   local/torch_xvector/prepare_feats_for_egs.sh --nj 40 --cmd "$train_cmd" \
     data/train_combined data/train_combined_no_sil exp/train_combined_no_sil
   utils/fix_data_dir.sh data/train_combined_no_sil
+
+
+  # Preparing the test features as well. This will be used only during testing
+  local/torch_xvector/prepare_feats_for_egs.sh --nj 10 --cmd "$train_cmd" \
+    data/voxceleb1_test data/voxceleb1_test_no_sil exp/voxceleb1_test_no_sil
+  utils/fix_data_dir.sh data/voxceleb1_test_no_sil
 fi
 
 
@@ -186,31 +188,31 @@ if [ $stage -eq 6 ]; then
 
   echo "Stage $stage: Getting neural network training egs";
 
-# Now we create the nnet examples using sid/nnet3/xvector/get_egs.sh.
-# The argument --num-repeats is related to the number of times a speaker
-# repeats per archive.  If it seems like you're getting too many archives
-# (e.g., more than 200) try increasing the --frames-per-iter option.  The
-# arguments --min-frames-per-chunk and --max-frames-per-chunk specify the
-# minimum and maximum length (in terms of number of frames) of the features
-# in the examples.
-#
-# To make sense of the egs script, it may be necessary to put an "exit 1"
-# command immediately after stage 3.  Then, inspect
-# exp/<your-dir>/egs/temp/ranges.* . The ranges files specify the examples that
-# will be created, and which archives they will be stored in.  Each line of
-# ranges.* has the following form:
-#    <utt-id> <local-ark-indx> <global-ark-indx> <start-frame> <end-frame> <spk-id>
-# For example:
-#    100304-f-sre2006-kacg-A 1 2 4079 881 23
+  # Now we create the nnet examples using sid/nnet3/xvector/get_egs.sh.
+  # The argument --num-repeats is related to the number of times a speaker
+  # repeats per archive.  If it seems like you're getting too many archives
+  # (e.g., more than 200) try increasing the --frames-per-iter option.  The
+  # arguments --min-frames-per-chunk and --max-frames-per-chunk specify the
+  # minimum and maximum length (in terms of number of frames) of the features
+  # in the examples.
+  #
+  # To make sense of the egs script, it may be necessary to put an "exit 1"
+  # command immediately after stage 3.  Then, inspect
+  # exp/<your-dir>/egs/temp/ranges.* . The ranges files specify the examples that
+  # will be created, and which archives they will be stored in.  Each line of
+  # ranges.* has the following form:
+  #    <utt-id> <local-ark-indx> <global-ark-indx> <start-frame> <end-frame> <spk-id>
+  # For example:
+  #    100304-f-sre2006-kacg-A 1 2 4079 881 23
 
-# If you're satisfied with the number of archives (e.g., 50-150 archives is
-# reasonable) and with the number of examples per speaker (e.g., 1000-5000
-# is reasonable) then you can let the script continue to the later stages.
-# Otherwise, try increasing or decreasing the --num-repeats option.  You might
-# need to fiddle with --frames-per-iter.  Increasing this value decreases the
-# the number of archives and increases the number of examples per archive.
-# Decreasing this value increases the number of archives, while decreasing the
-# number of examples per archive.
+  # If you're satisfied with the number of archives (e.g., 50-150 archives is
+  # reasonable) and with the number of examples per speaker (e.g., 1000-5000
+  # is reasonable) then you can let the script continue to the later stages.
+  # Otherwise, try increasing or decreasing the --num-repeats option.  You might
+  # need to fiddle with --frames-per-iter.  Increasing this value decreases the
+  # the number of archives and increases the number of examples per archive.
+  # Decreasing this value increases the number of archives, while decreasing the
+  # number of examples per archive.
 
   sid/nnet3/xvector/get_egs.sh --cmd "$train_cmd" \
     --nj 8 \
