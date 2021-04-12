@@ -147,14 +147,14 @@ if [ $stage -eq 4 ]; then
   # creating training examples, this can be removed.
 
   local/torch_xvector/prepare_feats_for_egs.sh --nj 40 --cmd "$train_cmd" \
-    data/train_combined data/train_combined_no_sil exp/train_combined_no_sil
-  utils/fix_data_dir.sh data/train_combined_no_sil
+    data/train_combined $trainFeatDir exp/train_combined_no_sil
+  utils/fix_data_dir.sh $trainFeatDir
 
 
   # Preparing the test features as well. This will be used only during testing
   local/torch_xvector/prepare_feats_for_egs.sh --nj 10 --cmd "$train_cmd" \
-    data/voxceleb1_test data/voxceleb1_test_no_sil exp/voxceleb1_test_no_sil
-  utils/fix_data_dir.sh data/voxceleb1_test_no_sil
+    data/voxceleb1_test $testFeatDir exp/voxceleb1_test_no_sil
+  utils/fix_data_dir.sh $testFeatDir
 fi
 
 
@@ -233,10 +233,7 @@ if [ $stage -eq 7 ]; then
 
   CUDA_VISIBLE_DEVICES=$cuda_device_id python -m torch.distributed.launch --nproc_per_node=1 \
     local/torch_xvector/train.py \
-      --stage $stage \
-      --nnet-dir $nnet_dir \
       --egs-dir $nnet_dir/egs \
-      $nnet_dir/egs
 
 fi
 
@@ -283,7 +280,7 @@ if [ $stage -eq 9 ]; then
   echo "Train the PLDA model..."
   $train_cmd $trainXvecDir/log/plda.log \
     ivector-compute-plda ark:$trainFeatDir/spk2utt \
-    "ark:ivector-subtract-global-mean scp:$trainXvecDir/xvector.scp ark:- | transform-vec $trainXvecDir/transform.mat ark:- ark:- | ivector-normalize-eqngth ark:-  ark:- |" \
+    "ark:ivector-subtract-global-mean scp:$trainXvecDir/xvector.scp ark:- | transform-vec $trainXvecDir/transform.mat ark:- ark:- | ivector-normalize-length ark:-  ark:- |" \
     $trainXvecDir/plda
 
 fi
@@ -293,10 +290,10 @@ if [ $stage -eq 10 ]; then
   echo "Stage $stage: Compute scores"
 
   $train_cmd $testXvecDir/log/voxceleb1_test_scoring.log \
-    ivector-plda-scoring --normalize-eqngth=true \
+    ivector-plda-scoring --normalize-length=true \
     "ivector-copy-plda --smoothing=0.0 $trainXvecDir/plda - |" \
-    "ark:ivector-subtract-global-mean $trainXvecDir/mean.vec scp:$testXvecDir/xvector.scp ark:- | transform-vec $trainXvecDir/transform.mat ark:- ark:- | ivector-normalize-eqngth ark:- ark:- |" \
-    "ark:ivector-subtract-global-mean $trainXvecDir/mean.vec scp:$testXvecDir/xvector.scp ark:- | transform-vec $trainXvecDir/transform.mat ark:- ark:- | ivector-normalize-eqngth ark:- ark:- |" \
+    "ark:ivector-subtract-global-mean $trainXvecDir/mean.vec scp:$testXvecDir/xvector.scp ark:- | transform-vec $trainXvecDir/transform.mat ark:- ark:- | ivector-normalize-length ark:- ark:- |" \
+    "ark:ivector-subtract-global-mean $trainXvecDir/mean.vec scp:$testXvecDir/xvector.scp ark:- | transform-vec $trainXvecDir/transform.mat ark:- ark:- | ivector-normalize-length ark:- ark:- |" \
     "cat '$voxceleb1_trials' | cut -d\  --fields=1,2 |" $testXvecDir/scores_voxceleb1_test
 
   eer=`compute-eer <(local/prepare_for_eer.py $voxceleb1_trials $testXvecDir/scores_voxceleb1_test) 2> /dev/null`
