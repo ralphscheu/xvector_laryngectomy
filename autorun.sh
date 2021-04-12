@@ -4,6 +4,7 @@
 set -e
 
 stage=7
+cuda_device_id=0
 
 . ./utils/parse_options.sh
 
@@ -37,11 +38,11 @@ if [ $stage -le 6 ]; then
 fi
 
 if [ $stage -le 7 ]; then
-  ./run.sh --stage 7
+  ./run.sh --stage 7 --cuda_device_id $cuda_device_id
 fi
 
 if [ $stage -le 8 ]; then
-  ./run.sh --stage 8
+  ./run.sh --stage 8 --cuda_device_id $cuda_device_id
 fi
 
 if [ $stage -le 9 ]; then

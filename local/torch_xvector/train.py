@@ -57,19 +57,15 @@ def main():
     args = parser.parse_args()
     print(args)
 
-    #####
     # SEEDS
     torch.manual_seed(0)
     np.random.seed(0)
-    #####
-
-    #####
+    
     # PREPARE MODEL
     totalSteps = args.numEpochs * args.numArchives
     net, optimizer, step, saveDir = train_utils.prepareModel(args)
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     numBatchesPerArk = int(args.numEgsPerArk/args.batchSize)
-    #####
     
     # LR SCHEDULERS
     cyclic_lr_scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer,
@@ -90,11 +86,10 @@ def main():
         ark_file = '{}/egs.{}.ark'.format(args.egs_dir,archiveI)
         print('Reading from archive %d' %archiveI)
 
-        preFetchRatio = args.preFetchRatio
         # Read with data data_loader
         data_loader = train_utils.nnet3EgsDL(ark_file)
         par_data_loader = DataLoader(data_loader,
-                                    batch_size=preFetchRatio*args.batchSize,
+                                    batch_size=args.preFetchRatio*args.batchSize,
                                     shuffle=False,
                                     num_workers=0,
                                     drop_last=False,
@@ -149,6 +144,7 @@ def main():
                     loggedBatch = batchI
 
         print('Archive processing time: %1.3f' %(time.time()-archive_start_time))
+        
         # Update dropout
         if 1.0*step < args.stepFrac*totalSteps:
             p_drop = args.pDropMax*step/(args.stepFrac*totalSteps)
