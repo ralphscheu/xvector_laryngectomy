@@ -234,7 +234,7 @@ if [ $stage -eq 7 ]; then
   echo "Stage $stage: Train the model"
 
   CUDA_VISIBLE_DEVICES=$cuda_device_id python -m torch.distributed.launch --nproc_per_node=$nproc \
-    local/torch_xvector/train.py --egs-dir $nnet_dir/egs
+    local/torch_xvector/train.py $nnet_dir/egs
 
 fi
 

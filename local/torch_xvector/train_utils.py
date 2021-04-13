@@ -47,6 +47,24 @@ class nnet3EgsDL(IterableDataset):
         return iter(self.fid)
 
 
+class nnet3EgsDLNonIterable(Dataset):
+    """ Data loader class to read directly from egs files, no HDF5
+    Loads the entire file at once to enable using DistributedSampler (needs len())
+    """
+
+    def __init__(self, arkFile):
+        self.reader = kaldi_python_io.Nnet3EgsReader(arkFile)
+        self.items = []
+        for item in self.reader:
+            self.items.append(item)
+
+    def __len__(self):
+        return len(self.items)
+
+    def __getitem__(self, idx):
+        return self.items[idx]
+
+
 class myH5DL(Dataset):
     """ Data loader class customized to reading from hdf5 files
     """
@@ -114,7 +132,7 @@ class myH5DL_sampler(Dataset):
 def prepareModel(args):
 
     device = torch.device("cuda:" + str(args.local_rank) if torch.cuda.is_available() else "cpu")
-    torch.distributed.init_process_group(backend='nccl', init_method='env://')
+    torch.distributed.init_process_group(backend='nccl', init_method='env://', world_size=args.world_size, rank=args.local_rank)
     torch.backends.cudnn.benchmark = True
 
     if args.trainingMode == 'resume':
@@ -200,21 +218,20 @@ def prepareModel(args):
         step += 1
 
     elif args.trainingMode == 'init':
-        print('Initializing Model..')
+        if args.is_master:
+            print(f'Initializing models...')
         step = 0
         net = eval('{}({}, p_dropout=0)'.format(args.modelType, args.numSpkrs))
         optimizer = torch.optim.Adam(net.parameters(), lr=args.baseLR)
 
+
+        if torch.cuda.device_count() > 1 and args.is_master:
+                print("Using ", torch.cuda.device_count(), "GPUs!")
+
         net.to(device)
-        net = torch.nn.parallel.DistributedDataParallel(net,
-                                                     device_ids=[0],
-                                                     output_device=0)
-        if torch.cuda.device_count() > 1:
-            print("Using ", torch.cuda.device_count(), "GPUs!")
-            net = nn.parallel.DistributedDataParallel(net, device_ids=[args.local_rank], output_device=args.local_rank)
-            # TODO: This is not tested on multiple GPUs
+        net = nn.parallel.DistributedDataParallel(net, device_ids=[args.local_rank])
         
-        eventID = datetime.now().strftime('%Y%m-%d%H-%M%S')
+        eventID = datetime.now().strftime(r'%Y%m-%d%H-%M%S')
         saveDir = './models/modelType_{}_rank_{}_event_{}' .format(args.modelType, args.local_rank, eventID)
         os.makedirs(saveDir)
 
@@ -381,6 +398,7 @@ def getParams():
 
     # PyTorch distributed run
     parser.add_argument("--local_rank", type=int, default=0)
+    parser.add_argument("--num_nodes", type=int, default=1)
 
     # General Parameters
     parser.add_argument('-modelType', default='xvecTDNN', help='Model class. Check models.py')
@@ -465,7 +483,7 @@ def computeValidAccuracy(args, modelDir):
     net.eval()
 
     correct, incorrect = 0, 0
-    for validArk in glob.glob(args.egs_dir+'/valid_egs.*.ark'):
+    for validArk in glob.glob(args.featDir+'/valid_egs.*.ark'):
         x = kaldi_python_io.Nnet3EgsReader(validArk)
         for key, mat in x:
             out = net(x=torch.Tensor(mat[0]['matrix']).permute(1,0).unsqueeze(0).cuda(),eps=0)
