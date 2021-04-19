@@ -286,23 +286,45 @@ if [ $stage -eq 9 ]; then
 fi
 
 
+# STAGE 10: PLDA BASED SCORING
 if [ $stage -eq 10 ]; then
-  echo "Stage $stage: Compute scores"
-
-  $train_cmd $testXvecDir/log/voxceleb1_test_scoring.log \
+  echo "Stage $stage: Compute scores using PLDA"
+  
+  scores_dir=$testXvecDir/scores_voxceleb1_test_plda
+  $train_cmd $testXvecDir/log/voxceleb1_test_plda_scoring.log \
     ivector-plda-scoring --normalize-length=true \
     "ivector-copy-plda --smoothing=0.0 $trainXvecDir/plda - |" \
     "ark:ivector-subtract-global-mean $trainXvecDir/mean.vec scp:$testXvecDir/xvector.scp ark:- | transform-vec $trainXvecDir/transform.mat ark:- ark:- | ivector-normalize-length ark:- ark:- |" \
     "ark:ivector-subtract-global-mean $trainXvecDir/mean.vec scp:$testXvecDir/xvector.scp ark:- | transform-vec $trainXvecDir/transform.mat ark:- ark:- | ivector-normalize-length ark:- ark:- |" \
-    "cat '$voxceleb1_trials' | cut -d\  --fields=1,2 |" $testXvecDir/scores_voxceleb1_test
+    "cat '$voxceleb1_trials' | cut -d\  --fields=1,2 |" $scores_dir
 
-  eer=`compute-eer <(local/prepare_for_eer.py $voxceleb1_trials $testXvecDir/scores_voxceleb1_test) 2> /dev/null`
-  mindcf1=`sid/compute_min_dcf.py --p-target 0.01 $testXvecDir/scores_voxceleb1_test $voxceleb1_trials 2> /dev/null`
-  mindcf2=`sid/compute_min_dcf.py --p-target 0.001 $testXvecDir/scores_voxceleb1_test $voxceleb1_trials 2> /dev/null`
+  eer=`compute-eer <(local/prepare_for_eer.py $voxceleb1_trials $scores_dir) 2> /dev/null`
+  mindcf1=`sid/compute_min_dcf.py --p-target 0.01 $scores_dir $voxceleb1_trials 2> /dev/null`
+  mindcf2=`sid/compute_min_dcf.py --p-target 0.001 $scores_dir $voxceleb1_trials 2> /dev/null`
   echo "EER: $eer%"
   echo "minDCF(p-target=0.01): $mindcf1"
   echo "minDCF(p-target=0.001): $mindcf2"
 
+fi
+
+
+# STAGE 9: COSINE SIMILARITY BASED SCORING
+if [ $stage -eq 11 ]; then
+  echo "Stage $stage: Compute scores using cosine distances"
+
+  scores_dir=$testXvecDir/scores_voxceleb1_test_cosine
+  cat $voxceleb1_trials | awk '{print $1, $2}' | \
+    ivector-compute-dot-products - \
+      "ark:ivector-normalize-length scp:$testXvecDir/xvector.scp ark:- |" \
+      "ark:ivector-normalize-length scp:$testXvecDir/xvector.scp ark:- |" \
+      $scores_dir
+
+  eer=`compute-eer <(local/prepare_for_eer.py $voxceleb1_trials $scores_dir) 2> /dev/null`
+  mindcf1=`sid/compute_min_dcf.py --c-miss 10 --p-target 0.01 $scores_dir $voxceleb1_trials 2> /dev/null`
+  mindcf2=`sid/compute_min_dcf.py --p-target 0.001 $scores_dir $voxceleb1_trials 2> /dev/null`
+  echo "EER: $eer%"
+  echo "minDCF(p-target=0.01): $mindcf1"
+  echo "minDCF(p-target=0.001): $mindcf2"
 fi
 
 
