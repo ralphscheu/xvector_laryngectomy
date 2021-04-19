@@ -255,14 +255,8 @@ if [ $stage -eq 8 ]; then
 fi
 
 
-dropout_schedule='0,0@0.20,0.1@0.50,0'
-srand=123
-
-
 # STAGE 9: COMPUTE MEAN VECTORS, TRAIN PLDA MODEL
 if [ $stage -eq 9 ]; then
-  echo "Stage $stage"
-
   # Reproducing voxceleb results
   echo "Compute the mean vector for centering the evaluation xvectors..."
   $train_cmd $trainXvecDir/log/compute_mean.log \
@@ -277,17 +271,26 @@ if [ $stage -eq 9 ]; then
     "ark:ivector-subtract-global-mean scp:$trainXvecDir/xvector.scp ark:- |" \
     ark:$trainFeatDir/utt2spk $trainXvecDir/transform.mat
 
-  echo "Train the PLDA model..."
   $train_cmd $trainXvecDir/log/plda.log \
     ivector-compute-plda ark:$trainFeatDir/spk2utt \
     "ark:ivector-subtract-global-mean scp:$trainXvecDir/xvector.scp ark:- | transform-vec $trainXvecDir/transform.mat ark:- ark:- | ivector-normalize-length ark:-  ark:- |" \
     $trainXvecDir/plda
-
 fi
 
 
-# STAGE 10: PLDA BASED SCORING
+# STAGE 10: PLOT XVECTORS FOR TEST UTTERANCES
 if [ $stage -eq 10 ]; then
+  $train_cmd $testXvecDir/log/save_xvec_for_plot.log \
+    ivector-normalize-length \
+      "ark:ivector-subtract-global-mean $trainXvecDir/mean.vec scp:$testXvecDir/xvector.scp ark:- | transform-vec $trainXvecDir/transform.mat ark:- ark:- |" \
+      ark,scp:$testXvecDir/xvec_for_plot.ark,$testXvecDir/xvec_for_plot.scp
+
+  python local/plot_xvec.py $testXvecDir/xvec_for_plot.scp
+fi
+
+
+# STAGE 11: PLDA BASED SCORING
+if [ $stage -eq 11 ]; then
   echo "Stage $stage: Compute scores using PLDA"
   
   scores_dir=$testXvecDir/scores_voxceleb1_test_plda
@@ -308,8 +311,8 @@ if [ $stage -eq 10 ]; then
 fi
 
 
-# STAGE 9: COSINE SIMILARITY BASED SCORING
-if [ $stage -eq 11 ]; then
+# STAGE 12: COSINE SIMILARITY BASED SCORING
+if [ $stage -eq 12 ]; then
   echo "Stage $stage: Compute scores using cosine distances"
 
   scores_dir=$testXvecDir/scores_voxceleb1_test_cosine
