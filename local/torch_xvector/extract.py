@@ -15,7 +15,6 @@ import os
 import sys
 import glob
 import argparse
-import kaldi_io
 from models import *
 import kaldi_python_io
 import socket
