@@ -56,7 +56,7 @@ fi
 
 if [ $stage -eq 1 ]; then
   # Make MFCCs and compute the energy-based VAD for each dataset
-  for name in train voxceleb1_test; do # voxceleb1_test; do
+  for name in train voxceleb1_test; do
     steps/make_mfcc.sh --write-utt2num-frames true --mfcc-config conf/mfcc.conf --nj 40 --cmd "$train_cmd" \
       data/${name} exp/make_mfcc $mfccdir
     utils/fix_data_dir.sh data/${name}
@@ -160,7 +160,7 @@ fi
 
 if [ $stage -eq 5 ]; then
   # Now, we need to remove features that are too short after removing silence
-  # frames.  We want atleast 5s (500 frames) per utterance.
+  # frames.  We want atleast 4s (400 frames) per utterance.
   min_len=400
   mv data/train_combined_no_sil/utt2num_frames data/train_combined_no_sil/utt2num_frames.bak
   awk -v min_len=${min_len} '$2 > min_len {print $1, $2}' data/train_combined_no_sil/utt2num_frames.bak > data/train_combined_no_sil/utt2num_frames
