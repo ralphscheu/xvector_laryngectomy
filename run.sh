@@ -285,7 +285,7 @@ if [ $stage -eq 10 ]; then
       "ark:ivector-subtract-global-mean $trainXvecDir/mean.vec scp:$testXvecDir/xvector.scp ark:- | transform-vec $trainXvecDir/transform.mat ark:- ark:- |" \
       ark,scp:$testXvecDir/xvec_for_plot.ark,$testXvecDir/xvec_for_plot.scp
 
-  python local/plot_xvec.py $testXvecDir/xvec_for_plot.scp
+  python local/plot_xvec.py $testXvecDir/xvec_for_plot.scp voxceleb1_test ./plots --dim-reduction-method=tsne
 fi
 
 

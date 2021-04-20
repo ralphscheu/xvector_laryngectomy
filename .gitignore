@@ -9,3 +9,4 @@ xvectors/
 mfcc/
 ./mfcc
 RIRS_NOISES
+*.png
