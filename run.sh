@@ -318,8 +318,8 @@ if [ $stage -eq 12 ]; then
   scores_dir=$testXvecDir/scores_voxceleb1_test_cosine
   cat $voxceleb1_trials | awk '{print $1, $2}' | \
     ivector-compute-dot-products - \
-      "ark:ivector-normalize-length scp:$testXvecDir/xvector.scp ark:- |" \
-      "ark:ivector-normalize-length scp:$testXvecDir/xvector.scp ark:- |" \
+      "ark:ivector-subtract-global-mean $trainXvecDir/mean.vec scp:$testXvecDir/xvector.scp ark:- | transform-vec $trainXvecDir/transform.mat ark:- ark:- | ivector-normalize-length ark:- ark:- |" \
+      "ark:ivector-subtract-global-mean $trainXvecDir/mean.vec scp:$testXvecDir/xvector.scp ark:- | transform-vec $trainXvecDir/transform.mat ark:- ark:- | ivector-normalize-length ark:- ark:- |" \
       $scores_dir
 
   eer=`compute-eer <(local/prepare_for_eer.py $voxceleb1_trials $scores_dir) 2> /dev/null`
