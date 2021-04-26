@@ -205,10 +205,14 @@ def prepareModel(args):
         net = eval('{}({}, p_dropout=0)'.format(args.modelType, args.numSpkrs))
         optimizer = torch.optim.Adam(net.parameters(), lr=args.baseLR)
 
-        net.to(device)
-        net = torch.nn.parallel.DistributedDataParallel(net,
-                                                     device_ids=[0],
-                                                     output_device=0)
+        try:
+            net.to(device)
+        except RuntimeError as e:
+            print("RuntimeError: {}".format( str(e) ))
+            sys.exit(1)
+
+        net = torch.nn.parallel.DistributedDataParallel(net, device_ids=[0], output_device=0)
+
         if torch.cuda.device_count() > 1:
             print("Using ", torch.cuda.device_count(), "GPUs!")
             net = nn.DataParallel(net)
