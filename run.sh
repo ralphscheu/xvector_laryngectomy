@@ -33,10 +33,14 @@ voxceleb1_trials=data/voxceleb1_test/trials  # The trials file is downloaded by 
 nnet_name=torch_xvector_1a
 nnet_dir=exp/$nnet_name
 
+# X-vector directories
+trainXvecDir=xvectors/$nnet_name/train
+testXvecDir=xvectors/$nnet_name/test
+
+
 # which CUDA device to use (defaults to single gpu)
 nproc=1
 cuda_device_id=0
-
 
 stage=0
 
@@ -239,10 +243,6 @@ if [ $stage -eq 7 ]; then
 fi
 
 
-trainXvecDir=xvectors/$nnet_name/train
-testXvecDir=xvectors/$nnet_name/test
-
-
 if [ $stage -eq 8 ]; then
   modelDir=models/`ls models/ -t | head -n1`
 
@@ -294,8 +294,8 @@ fi
 if [ $stage -eq 11 ]; then
   echo "Stage $stage: Compute scores using PLDA"
   
-  scores_dir=$testXvecDir/scores_voxceleb1_test_plda
-  $train_cmd $testXvecDir/log/voxceleb1_test_plda_scoring.log \
+  scores_dir=$testXvecDir/scores_plda
+  $train_cmd $testXvecDir/log/plda_scoring.log \
     ivector-plda-scoring --normalize-length=true \
     "ivector-copy-plda --smoothing=0.0 $trainXvecDir/plda - |" \
     "ark:ivector-subtract-global-mean $trainXvecDir/mean.vec scp:$testXvecDir/xvector.scp ark:- | transform-vec $trainXvecDir/transform.mat ark:- ark:- | ivector-normalize-length ark:- ark:- |" \
@@ -316,16 +316,17 @@ fi
 if [ $stage -eq 12 ]; then
   echo "Stage $stage: Compute scores using cosine distances"
 
-  scores_dir=$testXvecDir/scores_voxceleb1_test_cosine
+  scores_dir=$testXvecDir/scores_cosine
   cat $voxceleb1_trials | awk '{print $1, $2}' | \
     ivector-compute-dot-products - \
       "ark:ivector-subtract-global-mean $trainXvecDir/mean.vec scp:$testXvecDir/xvector.scp ark:- | transform-vec $trainXvecDir/transform.mat ark:- ark:- | ivector-normalize-length ark:- ark:- |" \
       "ark:ivector-subtract-global-mean $trainXvecDir/mean.vec scp:$testXvecDir/xvector.scp ark:- | transform-vec $trainXvecDir/transform.mat ark:- ark:- | ivector-normalize-length ark:- ark:- |" \
       $scores_dir
 
-  eer=`compute-eer <(local/prepare_for_eer.py $voxceleb1_trials $scores_dir) 2> /dev/null`
-  mindcf1=`sid/compute_min_dcf.py --c-miss 10 --p-target 0.01 $scores_dir $voxceleb1_trials 2> /dev/null`
-  mindcf2=`sid/compute_min_dcf.py --p-target 0.001 $scores_dir $voxceleb1_trials 2> /dev/null`
+  eer=`compute-eer <(local/prepare_for_eer.py $voxceleb1_trials $scores_dir) #2> /dev/null`
+  mindcf1=`sid/compute_min_dcf.py --c-miss 10 --p-target 0.01 $scores_dir $voxceleb1_trials #2> /dev/null`
+  mindcf2=`sid/compute_min_dcf.py --p-target 0.001 $scores_dir $voxceleb1_trials #2> /dev/null`
+  
   echo "EER: $eer%"
   echo "minDCF(p-target=0.01): $mindcf1"
   echo "minDCF(p-target=0.001): $mindcf2"
