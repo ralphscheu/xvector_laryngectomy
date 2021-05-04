@@ -24,7 +24,7 @@ def main():
         help="egs directory")
 
     # General Parameters
-    parser.add_argument('-modelType', default='xvecTDNN', help='Model class. Check models.py')
+    parser.add_argument('--modelType', default='xvecTDNN', help='Model class. Check models.py')
     parser.add_argument('-featDim', default=30, type=int, help='Frame-level feature dimension')
     parser.add_argument('-trainingMode', default='init',
         help='(init) Train from scratch, (resume) Resume training, (finetune) Finetune a pretrained model')
