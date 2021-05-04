@@ -16,7 +16,7 @@ import numpy as np
 from torch.utils.data import DataLoader
 from torch.utils.data.distributed import DistributedSampler
 import math
-from models import xvecTDNN
+from models import *
 from torch.distributed import init_process_group
 from datetime import datetime
 
@@ -31,7 +31,9 @@ def train(args):
 
     device = torch.device("cuda:" + str(args.local_rank))
 
-    net = xvecTDNN(args.numSpkrs, p_dropout=0)
+    # args.modelType = (xvecTDNN | xvecTDNN_MHAttn)
+    net = eval('{}({}, p_dropout=0)'.format(args.modelType, args.numSpkrs))
+
     criterion = nn.CrossEntropyLoss()
     optimizer = torch.optim.Adam(net.parameters(), lr=args.baseLR)
 
@@ -42,8 +44,8 @@ def train(args):
             print("Using ", torch.cuda.device_count(), "GPUs!")
 
     # determine model dir
-    eventID = datetime.now().strftime('%Y-%m-%d')
-    saveDir = './models/modelType_{}_rank_{}_event_{}' .format(args.modelType, args.local_rank, eventID)
+    eventID = datetime.now().strftime('%Y%m%d-%H%M%S')
+    saveDir = './models/modelType_{}_event_{}_rank_{}' .format(args.modelType, eventID, args.local_rank)
     os.makedirs(saveDir)
 
     with torch.cuda.device(device):
@@ -127,21 +129,29 @@ def train(args):
                     optimizer.step()    # Does the update
                     cyclic_lr_scheduler.step()    # Update Learning Rate
 
-                    # Log
+                    # Log batches
                     if batchI-loggedBatch >= args.logStepSize:
                         logStepTime = time.time() - start_time
-                        print('Epoch: (%d/%d)    Batch: (%d/%d)    Avg Time/batch: %1.3f    Avg Loss/batch: %1.3f' %(
-                            int( max(1, math.ceil(step / args.numArchives) ) ),
-                            int( math.ceil(totalSteps / args.numArchives) ),
-                            batchI,
-                            numBatchesPerArk,
-                            logStepTime/(batchI-loggedBatch),
-                            loggingLoss/(batchI-loggedBatch)))
+                        
+                        if args.is_master:
+                            print('Epoch: (%d/%d)    Batch: (%d/%d)    Avg Time/batch: %1.3f    Avg Loss/batch: %1.3f' %
+                                (
+                                    int( max(1, math.ceil(step / args.numArchives) ) ),
+                                    int( math.ceil(totalSteps / args.numArchives) ),
+                                    batchI,
+                                    numBatchesPerArk,
+                                    logStepTime / (batchI-loggedBatch),
+                                    loggingLoss / (batchI-loggedBatch)
+                                )
+                            )
                         loggingLoss = 0.0
                         start_time = time.time()
                         loggedBatch = batchI
 
-            print('Archive processing time: %1.3f' %(time.time()-archive_start_time))
+            # Finished archive file
+            
+            if args.is_master:
+                print('Archive processing time: %1.3f' %(time.time()-archive_start_time))
             
             # Update dropout
             if 1.0*step < args.stepFrac*totalSteps:
@@ -151,7 +161,9 @@ def train(args):
             for x in net.modules():
                 if isinstance(x, torch.nn.Dropout):
                     x.p = p_drop
-            print('Dropout updated to %f' %p_drop)
+
+            if args.is_master:
+                print('Dropout updated to %f' %p_drop)
 
             # Save checkpoint
             torch.save({
@@ -164,8 +176,9 @@ def train(args):
                 }, '{}/checkpoint_step{}.tar'.format(saveDir, step))
 
             # Compute validation loss, update LR if using plateau rule
-            valAcc = train_utils.computeValidAccuracy(args, saveDir)
-            print('Validation accuracy is %1.2f precent' %(valAcc))
+            if args.is_master:
+                valAcc = train_utils.computeValidAccuracy(args, saveDir)
+                print('Validation accuracy is %1.2f precent' %(valAcc))
 
             # Cleanup. We always retain the last 10 models
             if step > 10:

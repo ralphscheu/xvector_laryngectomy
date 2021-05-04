@@ -58,7 +58,7 @@ class xvecTDNN_MHAttn(nn.Module):
         self.attn_input_size = 1500
         self.mh_attn = MultiHeadAttention(
             key_size=self.attn_input_size, query_size=self.attn_input_size, value_size=self.attn_input_size,
-            num_hiddens=1500, num_heads=1
+            num_hiddens=1500, num_heads=12
         )
 
         self.fc1 = fc_embedding_layer(in_channels=1500, out_channels=512, p_dropout=p_dropout)
