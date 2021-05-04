@@ -170,7 +170,6 @@ def prepareModel(args):
                 x.p = p_drop
         saveDir = args.resumeModelDir
 
-
     elif args.trainingMode == 'sanity_check':
 
         # select the latest model from modelDir
@@ -231,7 +230,7 @@ def prepareModel(args):
         net.to(device)
         net = nn.parallel.DistributedDataParallel(net, device_ids=[args.local_rank])
         
-        eventID = datetime.now().strftime(r'%Y%m-%d%H-%M%S')
+        eventID = datetime.now().strftime(r'%Y%m%d-%H%M%S')
         saveDir = './models/modelType_{}_rank_{}_event_{}' .format(args.modelType, args.local_rank, eventID)
         os.makedirs(saveDir)
 
@@ -401,7 +400,7 @@ def getParams():
     parser.add_argument("--num_nodes", type=int, default=1)
 
     # General Parameters
-    parser.add_argument('-modelType', default='xvecTDNN', help='Model class. Check models.py')
+    parser.add_argument('--modelType', default='xvecTDNN', help='Model class. Check models.py')
     parser.add_argument('-featDim', default=30, type=int, help='Frame-level feature dimension')
     parser.add_argument('-trainingMode', default='init',
         help='(init) Train from scratch, (resume) Resume training, (finetune) Finetune a pretrained model')
