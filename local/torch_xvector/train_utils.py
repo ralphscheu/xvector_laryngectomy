@@ -152,7 +152,6 @@ def prepareModel(args):
                 x.p = p_drop
         saveDir = args.resumeModelDir
 
-
     elif args.trainingMode == 'sanity_check':
 
         # select the latest model from modelDir
@@ -216,7 +215,7 @@ def prepareModel(args):
         if torch.cuda.device_count() > 1:
             print("Using ", torch.cuda.device_count(), "GPUs!")
             net = nn.DataParallel(net)
-        eventID = datetime.now().strftime('%Y%m-%d%H-%M%S')
+        eventID = datetime.now().strftime(r'%Y%m%d-%H%M%S')
         saveDir = './models/modelType_{}_event_{}' .format(args.modelType, eventID)
         os.makedirs(saveDir)
 
