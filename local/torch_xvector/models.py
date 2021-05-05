@@ -11,7 +11,7 @@ class xvecTDNN(nn.Module):
     """ Baseline x-vector model using statistics pooling (mean+std) """
 
     def __init__(self, numSpkrs, p_dropout):
-        super(xvecTDNN, self).__init__()
+        super().__init__()
         self.tdnn1 = tdnn_layer(in_channels=30, out_channels=512, p_dropout=p_dropout, kernel_size=5, dilation=1)
         self.tdnn2 = tdnn_layer(in_channels=512, out_channels=512, p_dropout=p_dropout, kernel_size=5, dilation=2)
         self.tdnn3 = tdnn_layer(in_channels=512, out_channels=512, p_dropout=p_dropout, kernel_size=7, dilation=3)

@@ -44,7 +44,7 @@ def train(args):
             print("Using ", torch.cuda.device_count(), "GPUs!")
 
     # determine model dir
-    eventID = datetime.now().strftime('%Y%m%d-%H%M%S')
+    eventID = datetime.now().strftime('%Y%m%dT%H%M%S')
     saveDir = './models/modelType_{}_event_{}_rank_{}' .format(args.modelType, eventID, args.local_rank)
     os.makedirs(saveDir)
 
