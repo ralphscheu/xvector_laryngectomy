@@ -249,10 +249,12 @@ if [ $stage -eq 8 ]; then
   echo "Stage $stage: Extract X-Vectors"
 
   echo python local/torch_xvector/extract.py $modelDir $trainFeatDir $trainXvecDir
-  CUDA_VISIBLE_DEVICES=$cuda_device_id python local/torch_xvector/extract.py $modelDir $trainFeatDir $trainXvecDir
+  CUDA_VISIBLE_DEVICES=$cuda_device_id python local/torch_xvector/extract.py $modelDir $trainFeatDir $trainXvecDir \
+    --modelType xvecTDNN_MHAttn
 
   echo python local/torch_xvector/extract.py $modelDir $testFeatDir $testXvecDir
-  python local/torch_xvector/extract.py $modelDir $testFeatDir $testXvecDir
+  CUDA_VISIBLE_DEVICES=$cuda_device_id python local/torch_xvector/extract.py $modelDir $testFeatDir $testXvecDir \
+    --modelType xvecTDNN_MHAttn
 fi
 
 
