@@ -38,6 +38,8 @@ trainXvecDir=xvectors/$nnet_name/train
 testXvecDir=xvectors/$nnet_name/test
 
 
+# which CUDA device to use (defaults to single gpu)
+nproc=1
 cuda_device_id=0
 
 stage=0
@@ -235,11 +237,10 @@ fi
 if [ $stage -eq 7 ]; then
   echo "Stage $stage: Train the model"
 
-  CUDA_VISIBLE_DEVICES=$cuda_device_id python -m torch.distributed.launch --nproc_per_node=1 \
-    local/torch_xvector/train.py \
-      --egs-dir $nnet_dir/egs \
-      --modelType xvecTDNN_MHAttn
-
+  CUDA_VISIBLE_DEVICES=$cuda_device_id \
+    $train_cmd logs/latest_train.log \
+      python -m torch.distributed.launch --nproc_per_node=$nproc \
+        local/torch_xvector/train.py --modelType xvecTDNN_MHAttn $nnet_dir/egs
 fi
 
 

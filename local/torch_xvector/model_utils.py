@@ -58,7 +58,10 @@ def transpose_output(X, num_heads):
 
 
 class MultiHeadAttention(nn.Module):
-    """ adapted from https://d2l.ai/chapter_attention-mechanisms/multihead-attention.html#multi-head-attention """
+    """
+    Multihead Self Attention Layer
+    adapted from https://d2l.ai/chapter_attention-mechanisms/multihead-attention.html#multi-head-attention
+    """
 
     def __init__(self, key_size, query_size, value_size, num_hiddens,
                  num_heads, p_dropout=0.1, bias=False, **kwargs):

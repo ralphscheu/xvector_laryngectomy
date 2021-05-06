@@ -47,6 +47,24 @@ class nnet3EgsDL(IterableDataset):
         return iter(self.fid)
 
 
+class nnet3EgsDLNonIterable(Dataset):
+    """ Data loader class to read directly from egs files, no HDF5
+    Loads the entire file at once to enable using DistributedSampler (needs len())
+    """
+
+    def __init__(self, arkFile):
+        self.reader = kaldi_python_io.Nnet3EgsReader(arkFile)
+        self.items = []
+        for item in self.reader:
+            self.items.append(item)
+
+    def __len__(self):
+        return len(self.items)
+
+    def __getitem__(self, idx):
+        return self.items[idx]
+
+
 class myH5DL(Dataset):
     """ Data loader class customized to reading from hdf5 files
     """
@@ -113,8 +131,8 @@ class myH5DL_sampler(Dataset):
 
 def prepareModel(args):
 
-    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-    torch.distributed.init_process_group(backend='nccl', init_method='env://')
+    device = torch.device("cuda:" + str(args.local_rank) if torch.cuda.is_available() else "cpu")
+    torch.distributed.init_process_group(backend='nccl', init_method='env://', world_size=args.world_size, rank=args.local_rank)
     torch.backends.cudnn.benchmark = True
 
     if args.trainingMode == 'resume':
@@ -199,181 +217,24 @@ def prepareModel(args):
         step += 1
 
     elif args.trainingMode == 'init':
-        print('Initializing Model..')
+        if args.is_master:
+            print(f'Initializing models...')
         step = 0
         net = eval('{}({}, p_dropout=0)'.format(args.modelType, args.numSpkrs))
         optimizer = torch.optim.Adam(net.parameters(), lr=args.baseLR)
 
-        try:
-            net.to(device)
-        except RuntimeError as e:
-            print("RuntimeError: {}".format( str(e) ))
-            sys.exit(1)
 
-        net = torch.nn.parallel.DistributedDataParallel(net, device_ids=[0], output_device=0)
+        if torch.cuda.device_count() > 1 and args.is_master:
+                print("Using ", torch.cuda.device_count(), "GPUs!")
 
-        if torch.cuda.device_count() > 1:
-            print("Using ", torch.cuda.device_count(), "GPUs!")
-            net = nn.DataParallel(net)
+        net.to(device)
+        net = nn.parallel.DistributedDataParallel(net, device_ids=[args.local_rank])
+        
         eventID = datetime.now().strftime(r'%Y%m%d-%H%M%S')
-        saveDir = './models/modelType_{}_event_{}' .format(args.modelType, eventID)
+        saveDir = './models/modelType_{}_rank_{}_event_{}' .format(args.modelType, args.local_rank, eventID)
         os.makedirs(saveDir)
 
     return net, optimizer, step, saveDir
-
-
-def prepareProtoModel(args):
-
-    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-    torch.distributed.init_process_group(backend='nccl', init_method='env://')
-    torch.backends.cudnn.benchmark = True
-
-    if args.trainingMode == 'initMeta':
-
-        print('Loading pre-trained model..')
-        episodeI = 0
-        modelFile = max(glob.glob(args.preTrainedModelDir+'/*'), key=os.path.getctime)
-        net = proto_xvecTDNN(args.numSpkrs, p_dropout=0)
-        optimizer = torch.optim.Adam(filter(lambda p: p.requires_grad, net.parameters()), lr=args.baseLR)
-
-        checkpoint = torch.load(modelFile,map_location=torch.device('cuda'))
-        new_state_dict = OrderedDict()
-        for k, v in checkpoint['model_state_dict'].items():
-            if k.startswith('module.'):
-                new_state_dict[k[7:]] = v  # ugly fix to remove 'module' from key
-            else:
-                new_state_dict[k] = v
-
-        net.tdnn1.weight = torch.nn.Parameter(new_state_dict['tdnn1.weight'])
-        net.tdnn1.bias = torch.nn.Parameter(new_state_dict['tdnn1.bias'])
-        net.tdnn2.weight = torch.nn.Parameter(new_state_dict['tdnn2.weight'])
-        net.tdnn2.bias = torch.nn.Parameter(new_state_dict['tdnn2.bias'])
-        net.tdnn3.weight = torch.nn.Parameter(new_state_dict['tdnn3.weight'])
-        net.tdnn3.bias = torch.nn.Parameter(new_state_dict['tdnn3.bias'])
-        net.tdnn4.weight = torch.nn.Parameter(new_state_dict['tdnn4.weight'])
-        net.tdnn4.bias = torch.nn.Parameter(new_state_dict['tdnn4.bias'])
-        net.tdnn5.weight = torch.nn.Parameter(new_state_dict['tdnn5.weight'])
-        net.tdnn5.bias = torch.nn.Parameter(new_state_dict['tdnn5.bias'])
-        net.to(device)
-
-        if torch.cuda.device_count() > 1:
-            print("Using ", torch.cuda.device_count(), "GPUs!")
-            net = nn.DataParallel(net)
-
-        eventID = datetime.now().strftime('%Y%m-%d%H-%M%S')
-        saveDir = './models/modelType_{}_event_{}_proto_{}_{}_{}'.format(
-            args.modelType, eventID, args.protoMinClasses, args.protoMaxClasses, args.supportFrac)
-        os.makedirs(saveDir)
-
-    elif args.trainingMode == 'resumeMeta':
-
-        # read the last checkpoint, assign step value
-        modelFile = max(glob.glob(args.resumeModelDir+'/*'), key=os.path.getctime)
-        checkpoint = torch.load(modelFile,map_location=torch.device('cuda'))
-        net = eval('proto_{}({}, p_dropout=0)'.format(args.modelType, args.numSpkrs))
-
-        currLR = checkpoint['optimizer_state_dict']['param_groups'][0]['lr']
-        optimizer = torch.optim.Adam(filter(lambda p: p.requires_grad, net.parameters()), lr=currLR)
-        new_state_dict = OrderedDict()
-        for k, v in checkpoint['model_state_dict'].items():
-            if k.startswith('module.'):
-                new_state_dict[k[7:]] = v  # ugly fix to remove 'module' from key
-            else:
-                new_state_dict[k] = v
-        # load params
-        net.load_state_dict(new_state_dict)
-        net.to(device)
-        episodeI = checkpoint['episodeI']
-        totalEpisodes = args.totalEpisodes
-        print('Resuming training from episodeI %d' %episodeI)
-        saveDir = args.resumeModelDir
-
-    return net, optimizer, episodeI, saveDir
-
-
-def prepareRelationModel(args):
-
-    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-    torch.distributed.init_process_group(backend='nccl', init_method='env://')
-    torch.backends.cudnn.benchmark = True
-
-    if args.trainingMode == 'initMeta':
-
-        print('Loading pre-trained model..')
-        episodeI = 0
-        modelFile = max(glob.glob(args.preTrainedModelDir+'/*'), key=os.path.getctime)
-        encoder_net = relation_encoder_xvecTDNN(args.numSpkrs, p_dropout=0)
-        relation_net = relation_relation_xvecTDNN()
-        encoder_optimizer = torch.optim.Adam(filter(lambda p: p.requires_grad, encoder_net.parameters()), lr=args.baseLR)
-        relation_optimizer = torch.optim.Adam(filter(lambda p: p.requires_grad, relation_net.parameters()), lr=args.baseLR)
-
-        checkpoint = torch.load(modelFile,map_location=torch.device('cuda'))
-        new_state_dict = OrderedDict()
-        for k, v in checkpoint['model_state_dict'].items():
-            if k.startswith('module.'):
-                new_state_dict[k[7:]] = v  # ugly fix to remove 'module' from key
-            else:
-                new_state_dict[k] = v
-
-        encoder_net.tdnn1.weight = torch.nn.Parameter(new_state_dict['tdnn1.weight'])
-        encoder_net.tdnn1.bias = torch.nn.Parameter(new_state_dict['tdnn1.bias'])
-        encoder_net.tdnn2.weight = torch.nn.Parameter(new_state_dict['tdnn2.weight'])
-        encoder_net.tdnn2.bias = torch.nn.Parameter(new_state_dict['tdnn2.bias'])
-        encoder_net.tdnn3.weight = torch.nn.Parameter(new_state_dict['tdnn3.weight'])
-        encoder_net.tdnn3.bias = torch.nn.Parameter(new_state_dict['tdnn3.bias'])
-        encoder_net.tdnn4.weight = torch.nn.Parameter(new_state_dict['tdnn4.weight'])
-        encoder_net.tdnn4.bias = torch.nn.Parameter(new_state_dict['tdnn4.bias'])
-        encoder_net.tdnn5.weight = torch.nn.Parameter(new_state_dict['tdnn5.weight'])
-        encoder_net.tdnn5.bias = torch.nn.Parameter(new_state_dict['tdnn5.bias'])
-        encoder_net.to(device)
-        relation_net.to(device)
-
-        if torch.cuda.device_count() > 1:
-            print("Using ", torch.cuda.device_count(), "GPUs!")
-            encoder_net = nn.DataParallel(encoder_net)
-            relation_net = nn.DataParallel(relation_net)
-
-        eventID = datetime.now().strftime('%Y%m-%d%H-%M%S')
-        saveDir = './models/modelType_{}_event_{}_proto_{}_{}_{}'.format(
-            args.modelType, eventID, args.protoMinClasses, args.protoMaxClasses, args.supportFrac)
-        os.makedirs(saveDir)
-
-    elif args.trainingMode == 'resumeMeta':
-
-        # read the last checkpoint, assign step value
-        modelFile = max(glob.glob(args.resumeModelDir+'/*'), key=os.path.getctime)
-        checkpoint = torch.load(modelFile,map_location=torch.device('cuda'))
-
-        encoder_net = relation_encoder_xvecTDNN(args.numSpkrs, p_dropout=0)
-        relation_net = relation_relation_xvecTDNN()
-        currLR = checkpoint['encoder_optimizer_state_dict']['param_groups'][0]['lr']
-        encoder_optimizer = torch.optim.Adam(filter(lambda p: p.requires_grad, encoder_net.parameters()), lr=currLR)
-        relation_optimizer = torch.optim.Adam(filter(lambda p: p.requires_grad, relation_net.parameters()), lr=currLR)
-
-        new_state_dict = OrderedDict()
-        for k, v in checkpoint['encoder_state_dict'].items():
-            if k.startswith('module.'):
-                new_state_dict[k[7:]] = v  # ugly fix to remove 'module' from key
-            else:
-                new_state_dict[k] = v
-        encoder_net.load_state_dict(new_state_dict)
-        new_state_dict = OrderedDict()
-        for k, v in checkpoint['relation_state_dict'].items():
-            if k.startswith('module.'):
-                new_state_dict[k[7:]] = v  # ugly fix to remove 'module' from key
-            else:
-                new_state_dict[k] = v
-        relation_net.load_state_dict(new_state_dict)
-
-        encoder_net.to(device)
-        relation_net.to(device)
-
-        episodeI = checkpoint['episodeI']
-        totalEpisodes = args.totalEpisodes
-        print('Resuming training from episodeI %d' %episodeI)
-        saveDir = args.resumeModelDir
-
-    return encoder_net, relation_net, encoder_optimizer, relation_optimizer, episodeI, saveDir
 
 
 
@@ -382,9 +243,10 @@ def getParams():
 
     # PyTorch distributed run
     parser.add_argument("--local_rank", type=int, default=0)
+    parser.add_argument("--num_nodes", type=int, default=1)
 
     # General Parameters
-    parser.add_argument('-modelType', default='xvecTDNN', help='Model class. Check models.py')
+    parser.add_argument('--modelType', default='xvecTDNN', help='Model class. Check models.py')
     parser.add_argument('-featDim', default=30, type=int, help='Frame-level feature dimension')
     parser.add_argument('-trainingMode', default='init',
         help='(init) Train from scratch, (resume) Resume training, (finetune) Finetune a pretrained model')
@@ -444,11 +306,8 @@ def checkParams(args):
         print('Provide model directory to resume training from')
         sys.exit(1)
 
-
-
 def computeValidAccuracy(args, modelDir):
-    """ Computes frame-level validation accruacy
-    """
+    """ Computes frame-level validation accuracy """
     modelFile = max(glob.glob(modelDir+'/*'), key=os.path.getctime)
     # Load the model
     net = eval('{}({}, p_dropout=0)'.format(args.modelType, args.numSpkrs))
@@ -466,7 +325,7 @@ def computeValidAccuracy(args, modelDir):
     net.eval()
 
     correct, incorrect = 0, 0
-    for validArk in glob.glob(args.egs_dir+'/valid_egs.*.ark'):
+    for validArk in glob.glob(args.featDir+'/valid_egs.*.ark'):
         x = kaldi_python_io.Nnet3EgsReader(validArk)
         for key, mat in x:
             out = net(x=torch.Tensor(mat[0]['matrix']).permute(1,0).unsqueeze(0).cuda(),eps=0)
