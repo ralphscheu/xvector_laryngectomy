@@ -3,7 +3,6 @@
 . ./path.sh
 set -e
 
-trainXvecDir=xvectors/torch_xvector_1a/train
 wav_root=/mnt/speechdata/pathologic_voices/altersstimme110_cut/WAV
 dataset_name=altersstimme110_cut
 dataset_prefix=CTRL
@@ -49,23 +48,3 @@ for wav_file in $wav_root/*; do
     echo ${dataset_prefix}_$(basename $wav_file .wav) ${dataset_prefix}_$(basename $wav_file .wav) >> $data_dir/spk2utt
 done
 
-
-# Make MFCCs and compute the energy-based VAD for each dataset
-steps/make_mfcc.sh --write-utt2num-frames true --mfcc-config conf/mfcc.conf --nj 10 --cmd "$train_cmd" \
-    $data_dir exp/${dataset_name}_make_mfcc $mfcc_dir
-utils/fix_data_dir.sh $data_dir
-sid/compute_vad_decision.sh --nj 10 --cmd "$train_cmd" \
-    $data_dir exp/${dataset_name}_make_vad $vad_dir
-utils/fix_data_dir.sh $data_dir
-
-
-# This script applies CMVN and removes nonspeech frames.
-local/torch_xvector/prepare_feats_for_egs.sh --nj 10 --cmd "$train_cmd" \
-    $data_dir ${data_dir}_no_sil exp/${dataset_name}_no_sil
-  utils/fix_data_dir.sh ${data_dir}_no_sil
-
-
-# Extract X-Vectors
-modelDir=models/`ls models/ -t | head -n1`
-testXvecDir=xvectors/${dataset_name}_no_sil
-python local/torch_xvector/extract.py $modelDir ${data_dir}_no_sil $testXvecDir

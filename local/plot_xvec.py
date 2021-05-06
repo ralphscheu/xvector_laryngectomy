@@ -48,7 +48,7 @@ def main():
         fontsize = 16)
     ax.scatter(x_reduced[:,0], x_reduced[:,1], c=targets, s=20)
     
-    timestamp = datetime.now().strftime('%Y%m-%d%H-%M%S')
+    timestamp = datetime.now().strftime('%Y%m%dT%H%M%S')
     
     plt.savefig('{}/{}__{}__{}.png'.format(
         args.output_dir, args.dataset_title, args.dim_reduction_method, timestamp)
