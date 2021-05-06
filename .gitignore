@@ -10,3 +10,4 @@ mfcc/
 ./mfcc
 RIRS_NOISES
 *.png
+*.pyc

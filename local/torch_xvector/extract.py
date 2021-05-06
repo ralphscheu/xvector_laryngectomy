@@ -28,9 +28,9 @@ def getSplitNum(text):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('-modelType', default='xvecTDNN', help='Refer train_utils.py ')
-    parser.add_argument('-numSpkrs', default=7323, type=int, help='Number of output labels for model')
-    parser.add_argument('-layerName', default='fc1', help="DNN layer for embeddings")
+    parser.add_argument('--modelType', default='xvecTDNN', help='Refer train_utils.py ')
+    parser.add_argument('--numSpkrs', default=7323, type=int, help='Number of output labels for model')
+    parser.add_argument('--layerName', default='fc1', help="DNN layer for embeddings")
     parser.add_argument('modelDirectory', help='Directory containing the model checkpoints')
     parser.add_argument('featDir', help='Directory containing features ready for extraction')
     parser.add_argument('embeddingDir', help='Output directory')
