@@ -3,7 +3,7 @@ import re
 
 utts_LA = []
 utts_CTRL = []
-with open("data/pathovoices_no_sil/wav.scp") as f:
+with open("data/pathologic_voices_CTRL_LARY_no_sil/wav.scp") as f:
     for line in f:
         if re.search(r'(\w+)_', line.split()[0])[1] == 'LA':
             utts_LA.append(line.split()[0])
@@ -29,6 +29,6 @@ for utt in utts_CTRL:
         trials.append("{} {} target".format( utt, o_utt ))
 
 # write to trials file
-with open("data/pathovoices_no_sil/trials", "w") as f:
+with open("data/pathologic_voices_CTRL_LARY_no_sil/trials", "w") as f:
     for trial_line in trials:
         f.write("{}\n".format( trial_line ))
