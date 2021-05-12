@@ -1,12 +1,11 @@
 import matplotlib
 import matplotlib.pyplot as plt
 import pandas as pd
-import numpy
+import numpy as np
 import argparse
 import sys
 import subprocess
 from kaldi_python_io import ScriptReader
-from sklearn.decomposition import PCA
 from sklearn.manifold import TSNE
 from datetime import datetime
 import matplotlib.cm as cm
@@ -20,30 +19,51 @@ def save_plot(output_dir, filename):
     print("Saved plot to {}".format( save_filepath ))
 
 
-def plot_speakergroups(xvectors, title, output_dir, include_PARE=False):
+def get_outliers(utterances, n=10):
+    print("---")
+    embs = np.vstack(utterances.embedding.values)
+    print("embs:", embs.shape)
+    centroid = np.mean(embs, axis=0)
+    print("centroid:", centroid)
+    df = utterances.copy()
+    df["distance"] = df.embedding.apply(lambda x: np.linalg.norm(x - centroid))
+    print("distance:", df.distance.min(), df.distance.max())
+    return df.sort_values("distance", ascending=False).head(df.shape[0] // 6)
+
+
+def plot_speakergroups(xvectors, title, output_dir, annotate_outliers=False, include_PARE=False):
     """ create scatter plot with colors representing speaker groups """
-    fig = plt.figure(figsize = (16, 16))
+    pointsize = 160
+    figsize = (16, 16)
+    if annotate_outliers:
+        figsize = (22, 22)
+    fig = plt.figure(figsize=figsize)
     ax = fig.add_subplot(1,1,1) 
     ax.set_title(title)
-    pointsize = 160
-    
+
     x_LARY = xvectors.loc[xvectors.speaker_group == 'LARY']
-    embeddings_LARY = numpy.vstack(x_LARY.embedding.values)
-    ax.scatter(embeddings_LARY[:,0], embeddings_LARY[:,1],
-        c='tab:red', label='LARY', s=pointsize)
-    
+    embeddings_LARY = np.vstack(x_LARY.embedding.values)
+    ax.scatter(embeddings_LARY[:,0], embeddings_LARY[:,1], c='tab:red', label='LARY', s=pointsize)
+    if annotate_outliers:
+        for _, row in get_outliers(x_LARY).iterrows():
+            ax.annotate(row.utt, row.embedding)
+
     if include_PARE:
         x_PARE = xvectors.loc[xvectors.speaker_group == 'PARE']
-        embeddings_PARE = numpy.vstack(x_PARE.embedding.values)
+        embeddings_PARE = np.vstack(x_PARE.embedding.values)
         if x_PARE.size == 0:
             sys.exit("No x-vectors found for PARE!")
-        ax.scatter(embeddings_PARE[:,0], embeddings_PARE[:,1],
-                c='tab:olive', label='PARE', s=pointsize)
+        ax.scatter(embeddings_PARE[:,0], embeddings_PARE[:,1], c='tab:olive', label='PARE', s=pointsize)
+        if annotate_outliers:
+            for _, row in get_outliers(x_PARE).iterrows():
+                ax.annotate(row.utt, row.embedding)
     
     x_CTRL = xvectors.loc[xvectors.speaker_group == 'CTRL']
-    embeddings_CTRL = numpy.vstack(x_CTRL.embedding.values)
-    ax.scatter(embeddings_CTRL[:,0], embeddings_CTRL[:,1],
-        c='tab:blue', label='CTRL', s=pointsize)
+    embeddings_CTRL = np.vstack(x_CTRL.embedding.values)
+    ax.scatter(embeddings_CTRL[:,0], embeddings_CTRL[:,1], c='tab:blue', label='CTRL', s=pointsize)
+    if annotate_outliers:
+        for _, row in get_outliers(x_CTRL).iterrows():
+            ax.annotate(row.utt, row.embedding)
    
     plt.axis('off')
     ax.legend(fontsize=32)
@@ -60,20 +80,16 @@ def plot_scores(xvectors, score_col, title, output_dir, annotate=False):
     colormap_score_factor = -1
     
     xvectors_LARY = xvectors.loc[xvectors.speaker_group == 'LARY']
-    embeddings_LARY = numpy.vstack(xvectors_LARY.embedding.values)
-    ax.scatter(embeddings_LARY[:,0], embeddings_LARY[:,1],
-        c=xvectors_LARY[score_col] * colormap_score_factor, 
-        marker="^", label='LARY', s=pointsize, cmap=colormap)
+    embeddings_LARY = np.vstack(xvectors_LARY.embedding.values)
+    ax.scatter(embeddings_LARY[:,0], embeddings_LARY[:,1], c=xvectors_LARY[score_col] * colormap_score_factor, marker="^", label='LARY', s=pointsize, cmap=colormap)
     if annotate:
         for row in xvectors_LARY.iterrows():
             row = row[1]  # remove index
             ax.annotate(round(row[score_col], 2), row.embedding)
     
     xvectors_CTRL = xvectors.loc[xvectors.speaker_group == 'CTRL']
-    embeddings_CTRL = numpy.vstack(xvectors_CTRL.embedding.values)
-    ax.scatter(embeddings_CTRL[:,0], embeddings_CTRL[:,1],
-        c=xvectors_CTRL[score_col] * colormap_score_factor,
-         marker="o", label='CTRL', s=pointsize, cmap=colormap)
+    embeddings_CTRL = np.vstack(xvectors_CTRL.embedding.values)
+    ax.scatter(embeddings_CTRL[:,0], embeddings_CTRL[:,1], c=xvectors_CTRL[score_col] * colormap_score_factor, marker="o", label='CTRL', s=pointsize, cmap=colormap)
     if annotate:
         for row in xvectors_CTRL.iterrows():
             row = row[1]  # remove index
@@ -121,9 +137,9 @@ def main():
     parser.add_argument('scp_input', help='scp file for xvectors to plot')
     parser.add_argument('output_dir', help='directory to save plot into')
     args = parser.parse_args()
-    PLOT_DIM = 2
 
 
+    # get extracted xvectors
     xvectors = pd.DataFrame(columns=["utt", "speaker_group", "embedding"])
     reader = ScriptReader(args.scp_input)
     for key, mat in reader:
@@ -131,36 +147,30 @@ def main():
             'utt': key.split('_', maxsplit=1)[1], 
             'speaker_group': key.split('_', maxsplit=1)[0], 
             'embedding': mat}, ignore_index=True)
+
+    # outliers = get_outliers(xvectors.loc[xvectors.speaker_group == 'LARY'])
+    # for _, emb in outliers.iterrows():
+    #     pass
+    # print("outliers:", outliers.shape)
+
     print("Reducing dimensions using t-SNE...")
-    xvectors.embedding = list(TSNE(n_components=PLOT_DIM).fit_transform( numpy.vstack(xvectors.embedding.values) ))
+    xvectors.embedding = list(TSNE(n_components=2).fit_transform(np.vstack(xvectors.embedding.values)))
+
+    # get effort scores
+    mean_scores_LARY = get_mean_scores("/mnt/speechdata/pathologic_voices/laryng41/labels/laryng41.raters5.crits", "/mnt/speechdata/pathologic_voices/laryng41/labels/laryng41.raters5.scores")
+    mean_scores_CTRL = get_mean_scores("/mnt/speechdata/pathologic_voices/altersstimme110_cut/labels/altersstimme110_cut.logos.crits", "/mnt/speechdata/pathologic_voices/altersstimme110_cut/labels/altersstimme110_cut.logos.scores")
 
 
     # plot colored speakergroups with and w/o partial resections
-    plot_speakergroups(xvectors, "pathologic_voices_CTRL_LARY", 
-        args.output_dir, include_PARE=False)
-    plot_speakergroups(xvectors, "pathologic_voices_CTRL_PARE", 
-        args.output_dir, include_PARE=True)
+    # plot_speakergroups(xvectors, "pathologic_voices_CTRL_LARY_annotated", args.output_dir, annotate_outliers=True, include_PARE=False)
+    plot_speakergroups(xvectors, "pathologic_voices_CTRL_PARE_LARY_annotated", args.output_dir, annotate_outliers=True, include_PARE=True)
 
-
-    # get effort scores
-    mean_scores_LARY = get_mean_scores(
-        "/mnt/speechdata/pathologic_voices/laryng41/labels/laryng41.raters5.crits", 
-        "/mnt/speechdata/pathologic_voices/laryng41/labels/laryng41.raters5.scores")
-    # print("=== LARY scores ===")
-    # print(mean_scores_LARY.describe())
-
-    mean_scores_CTRL = get_mean_scores(
-        "/mnt/speechdata/pathologic_voices/altersstimme110_cut/labels/altersstimme110_cut.logos.crits",
-        "/mnt/speechdata/pathologic_voices/altersstimme110_cut/labels/altersstimme110_cut.logos.scores")
-    # print("=== CTRL scores ===")
-    # print(mean_scores_CTRL.describe())
-
-    mean_scores = pd.concat([mean_scores_LARY, mean_scores_CTRL])  # concat the dictionaries containing scores
-
-    plot_scores_histograms(mean_scores_LARY, mean_scores_CTRL)
+    # plot_scores_histograms(mean_scores_LARY, mean_scores_CTRL)
     
-    for crit in ['effort', 'intell', 'overall']:
-        plot_scores(xvectors.merge(mean_scores, on="utt"), crit, "pathologic_voices_CTRL_LARY - {}".format(crit), args.output_dir)
+
+    # mean_scores = pd.concat([mean_scores_LARY, mean_scores_CTRL])  # concat the dictionaries containing scores
+    # for crit in ['effort', 'intell', 'overall']:
+    #     plot_scores(xvectors.merge(mean_scores, on="utt"), crit, "pathologic_voices_CTRL_LARY - {}".format(crit), args.output_dir)
 
 
 if __name__ == "__main__":
