@@ -47,7 +47,7 @@ class xvecTDNN(nn.Module):
 class xvecTDNN_MHAttn(nn.Module):
     """ X-Vector model using Multihead Attention Pooling """
 
-    def __init__(self, numSpkrs, p_dropout):
+    def __init__(self, numSpkrs, p_dropout, num_attn_heads):
         super().__init__()
         self.tdnn1 = tdnn_layer(in_channels=30, out_channels=512, p_dropout=p_dropout, kernel_size=5, dilation=1)
         self.tdnn2 = tdnn_layer(in_channels=512, out_channels=512, p_dropout=p_dropout, kernel_size=5, dilation=2)
@@ -58,7 +58,7 @@ class xvecTDNN_MHAttn(nn.Module):
         self.attn_input_size = 1500
         self.mh_attn = MultiHeadAttention(
             key_size=self.attn_input_size, query_size=self.attn_input_size, value_size=self.attn_input_size,
-            num_hiddens=1500, num_heads=12
+            num_hiddens=1500, num_heads=num_attn_heads
         )
 
         self.fc1 = fc_embedding_layer(in_channels=1500, out_channels=512, p_dropout=p_dropout)
