@@ -9,7 +9,6 @@ from kaldi_python_io import ScriptReader
 from sklearn.manifold import TSNE
 from datetime import datetime
 import matplotlib.cm as cm
-import pandas as pd
 
 
 def save_plot(output_dir, filename):
@@ -120,8 +119,7 @@ def plot_scores_histograms(scores_LARY, scores_CTRL):
 
 def parse_ages(filename):
     """ parse ages labels file into dictionary """
-    with open(filename):
-        pass
+    return pd.read_table(filename, names=['utt', 'age'])
 
 
 def get_mean_scores(f_crits, f_scores):
@@ -129,7 +127,7 @@ def get_mean_scores(f_crits, f_scores):
     mean_scores = pd.read_table(f_scores, ",", names=criteria)
     mean_scores.rename(columns={'Untersucher': 'rater', 'PatientNr': 'utt', 'file': 'utt', 'Anstr': 'effort', 'Verst': 'intell', 'Gesamt': 'overall'}, inplace=True)
     mean_scores = mean_scores.groupby(["utt"]).mean().reset_index()  # compute mean score across all raters
-    return mean_scores[['utt', 'effort', 'intell', 'overall']]
+    return mean_scores
 
 
 def main():
@@ -157,8 +155,8 @@ def main():
     xvectors.embedding = list(TSNE(n_components=2).fit_transform(np.vstack(xvectors.embedding.values)))
 
     # get effort scores
-    mean_scores_LARY = get_mean_scores("/mnt/speechdata/pathologic_voices/laryng41/labels/laryng41.raters5.crits", "/mnt/speechdata/pathologic_voices/laryng41/labels/laryng41.raters5.scores")
-    mean_scores_CTRL = get_mean_scores("/mnt/speechdata/pathologic_voices/altersstimme110_cut/labels/altersstimme110_cut.logos.crits", "/mnt/speechdata/pathologic_voices/altersstimme110_cut/labels/altersstimme110_cut.logos.scores")
+    mean_scores_LARY = get_mean_scores("/mnt/speechdata/pathologic_voices/laryng41/labels/laryng41.raters5.crits", "/mnt/speechdata/pathologic_voices/laryng41/labels/laryng41.raters5.scores")[['utt', 'effort', 'intell', 'overall']]
+    mean_scores_CTRL = get_mean_scores("/mnt/speechdata/pathologic_voices/altersstimme110_cut/labels/altersstimme110_cut.logos.crits", "/mnt/speechdata/pathologic_voices/altersstimme110_cut/labels/altersstimme110_cut.logos.scores")[['utt', 'effort', 'intell', 'overall']]
 
 
     # plot colored speakergroups with and w/o partial resections
