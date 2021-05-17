@@ -240,7 +240,7 @@ if [ $stage -eq 7 ]; then
   CUDA_VISIBLE_DEVICES=$cuda_device_id \
     $train_cmd logs/latest_train.log \
       python -m torch.distributed.launch --nproc_per_node=$nproc \
-        local/torch_xvector/train.py --modelType xvecTDNN_MHAttn $nnet_dir/egs
+        local/torch_xvector/train.py --modelType xvecTDNN_MHAttn --numAttnHeads 1 $nnet_dir/egs
 fi
 
 

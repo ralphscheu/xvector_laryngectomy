@@ -261,6 +261,7 @@ def getParams():
     trainingArgs.add_argument('-batchSize', default=32, type=int, help='Batch size')
     trainingArgs.add_argument('-numEgsPerArk', default=366150, type=int,
         help='Number of training examples per egs file')
+    trainingArgs.add_argument('--numAttnHeads', default=12, type=int)
 
     # Optimization Params
     optArgs = parser.add_argument_group('Optimization Parameters')
@@ -310,7 +311,7 @@ def computeValidAccuracy(args, modelDir):
     """ Computes frame-level validation accuracy """
     modelFile = max(glob.glob(modelDir+'/*'), key=os.path.getctime)
     # Load the model
-    net = eval('{}({}, p_dropout=0)'.format(args.modelType, args.numSpkrs))
+    net = eval('{}(numSpkrs={}, p_dropout=0, num_attn_heads=1)'.format(args.modelType, args.numSpkrs))
 
     checkpoint = torch.load(modelFile,map_location=torch.device('cuda'))
     new_state_dict = OrderedDict()

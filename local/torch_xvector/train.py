@@ -32,7 +32,8 @@ def train(args):
     device = torch.device("cuda:" + str(args.local_rank))
 
     # args.modelType = (xvecTDNN | xvecTDNN_MHAttn)
-    net = eval('{}({}, p_dropout=0)'.format(args.modelType, args.numSpkrs))
+    net = eval('{}(numSpkrs={}, p_dropout=0, num_attn_heads={})'.format(args.modelType, args.numSpkrs, args.numAttnHeads))
+    print("initialized {}(numSpkrs={}, p_dropout=0, num_attn_heads={})".format(args.modelType, args.numSpkrs, args.numAttnHeads))
 
     criterion = nn.CrossEntropyLoss()
     optimizer = torch.optim.Adam(net.parameters(), lr=args.baseLR)
