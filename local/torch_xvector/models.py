@@ -4,14 +4,16 @@ import torch.nn as nn
 from torch.nn import functional as F
 import numpy as np
 import math
-from model_utils import *
+from local.torch_xvector.model_utils import *
 
 
 class xvecTDNN(nn.Module):
     """ Baseline x-vector model using statistics pooling (mean+std) """
 
-    def __init__(self, numSpkrs, p_dropout):
+    def __init__(self, numSpkrs, p_dropout, rank):
         super().__init__()
+        self.rank = rank
+
         self.tdnn1 = tdnn_layer(in_channels=30, out_channels=512, p_dropout=p_dropout, kernel_size=5, dilation=1)
         self.tdnn2 = tdnn_layer(in_channels=512, out_channels=512, p_dropout=p_dropout, kernel_size=5, dilation=2)
         self.tdnn3 = tdnn_layer(in_channels=512, out_channels=512, p_dropout=p_dropout, kernel_size=7, dilation=3)
@@ -22,7 +24,7 @@ class xvecTDNN(nn.Module):
         self.fc2 = fc_embedding_layer(in_channels=512, out_channels=512, p_dropout=p_dropout)
         self.fc3 = nn.Linear(512, numSpkrs)
 
-    def forward(self, x, eps):
+    def forward(self, x, eps=1e-5):
         """Note: x must be (batch_size, feat_dim, chunk_len)"""
         
         x = self.tdnn1(x)
@@ -33,7 +35,7 @@ class xvecTDNN(nn.Module):
 
         if self.training:
             shape = x.size()
-            noise = torch.cuda.FloatTensor(shape)
+            noise = torch.cuda.FloatTensor(shape).to(self.rank)
             torch.randn(shape, out=noise)
             x += noise*eps
 
