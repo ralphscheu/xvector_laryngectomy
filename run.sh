@@ -30,22 +30,20 @@ testFeatDir=data/voxceleb1_test_no_sil
 voxceleb1_trials=data/voxceleb1_test/trials  # The trials file is downloaded by local/make_voxceleb1_v2.pl.
 
 # configure the model to run
-nnet_name=torch_xvector_1a
-nnet_dir=exp/$nnet_name
-
-# X-vector directories
-trainXvecDir=xvectors/$nnet_name/train
-testXvecDir=xvectors/$nnet_name/test
-
+nnet_dir=exp/torch_xvector_1a
+nnet_name=xvector
 
 # which CUDA device to use (defaults to single gpu)
 nproc=1
 cuda_device_id=0
 
 stage=0
-
+modelDir=models/`ls models/ -t | head -n1`
 . ./utils/parse_options.sh
 
+# X-vector directories
+trainXvecDir=xvectors/$nnet_name/train
+testXvecDir=xvectors/$nnet_name/test
 
 if [ $stage -eq 0 ]; then
   local/make_voxceleb2.pl $voxceleb2_root dev data/voxceleb2_train
@@ -243,19 +241,16 @@ if [ $stage -eq 7 ]; then
         local/torch_xvector/train.py --modelType xvecTDNN_MHAttn --numAttnHeads 1 $nnet_dir/egs
 fi
 
+# modelDir=models/`ls models/ -t | head -n1`
 
 if [ $stage -eq 8 ]; then
-  modelDir=models/`ls models/ -t | head -n1`
-
   echo "Stage $stage: Extract X-Vectors"
 
-  echo python local/torch_xvector/extract.py $modelDir $trainFeatDir $trainXvecDir
-  CUDA_VISIBLE_DEVICES=$cuda_device_id python local/torch_xvector/extract.py $modelDir $trainFeatDir $trainXvecDir \
-    --modelType xvecTDNN_MHAttn
+  echo CUDA_VISIBLE_DEVICES=$cuda_device_id python local/torch_xvector/extract.py $modelDir $trainFeatDir $trainXvecDir
+  CUDA_VISIBLE_DEVICES=$cuda_device_id python local/torch_xvector/extract.py $modelDir $trainFeatDir $trainXvecDir
 
-  echo python local/torch_xvector/extract.py $modelDir $testFeatDir $testXvecDir
-  CUDA_VISIBLE_DEVICES=$cuda_device_id python local/torch_xvector/extract.py $modelDir $testFeatDir $testXvecDir \
-    --modelType xvecTDNN_MHAttn
+  echo CUDA_VISIBLE_DEVICES=$cuda_device_id python local/torch_xvector/extract.py $modelDir $testFeatDir $testXvecDir
+  CUDA_VISIBLE_DEVICES=$cuda_device_id python local/torch_xvector/extract.py $modelDir $testFeatDir $testXvecDir
 fi
 
 
