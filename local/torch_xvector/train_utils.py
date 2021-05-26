@@ -247,42 +247,42 @@ def getParams():
 
     # General Parameters
     parser.add_argument('--modelType', default='xvecTDNN', help='Model class. Check models.py')
-    parser.add_argument('-featDim', default=30, type=int, help='Frame-level feature dimension')
-    parser.add_argument('-trainingMode', default='init',
+    parser.add_argument('--featDim', default=30, type=int, help='Frame-level feature dimension')
+    parser.add_argument('--trainingMode', default='init',
         help='(init) Train from scratch, (resume) Resume training, (finetune) Finetune a pretrained model')
-    parser.add_argument('-resumeModelDir', default=None, help='Path containing training checkpoints')
+    parser.add_argument('--resumeModelDir', default=None, help='Path containing training checkpoints')
     parser.add_argument('featDir', default=None, help='Directory with training archives')
 
     # Training Parameters - no more trainFullXvector = 0
     trainingArgs = parser.add_argument_group('General Training Parameters')
-    trainingArgs.add_argument('-numArchives', default=84, type=int, help='Number of egs.*.ark files')
-    trainingArgs.add_argument('-numSpkrs', default=7323, type=int, help='Number of output labels')
-    trainingArgs.add_argument('-logStepSize', default=200, type=int, help='Iterations per log')
-    trainingArgs.add_argument('-batchSize', default=32, type=int, help='Batch size')
-    trainingArgs.add_argument('-numEgsPerArk', default=366150, type=int,
+    trainingArgs.add_argument('--numArchives', default=84, type=int, help='Number of egs.*.ark files')
+    trainingArgs.add_argument('--numSpkrs', default=7323, type=int, help='Number of output labels')
+    trainingArgs.add_argument('--logStepSize', default=200, type=int, help='Iterations per log')
+    trainingArgs.add_argument('--batchSize', default=32, type=int, help='Batch size')
+    trainingArgs.add_argument('--numEgsPerArk', default=366150, type=int,
         help='Number of training examples per egs file')
     trainingArgs.add_argument('--numAttnHeads', default=12, type=int)
 
     # Optimization Params
     optArgs = parser.add_argument_group('Optimization Parameters')
-    optArgs.add_argument('-preFetchRatio', default=30, type=int, help='xbatchSize to fetch from dataloader')
-    optArgs.add_argument('-optimMomentum', default=0.5, type=float, help='Optimizer momentum')
-    optArgs.add_argument('-baseLR', default=1e-3, type=float, help='Initial LR')
-    optArgs.add_argument('-maxLR', default=2e-3, type=float, help='Maximum LR')
-    optArgs.add_argument('-numEpochs', default=2, type=int, help='Number of training epochs')
-    optArgs.add_argument('-noiseEps', default=1e-5, type=float, help='Noise strength before pooling')
-    optArgs.add_argument('-pDropMax', default=0.2, type=float, help='Maximum dropout probability')
-    optArgs.add_argument('-stepFrac', default=0.5, type=float,
+    optArgs.add_argument('--preFetchRatio', default=30, type=int, help='xbatchSize to fetch from dataloader')
+    optArgs.add_argument('--optimMomentum', default=0.5, type=float, help='Optimizer momentum')
+    optArgs.add_argument('--baseLR', default=1e-3, type=float, help='Initial LR')
+    optArgs.add_argument('--maxLR', default=4e-3, type=float, help='Maximum LR')
+    optArgs.add_argument('--numEpochs', default=2, type=int, help='Number of training epochs')
+    optArgs.add_argument('--noiseEps', default=1e-5, type=float, help='Noise strength before pooling')
+    optArgs.add_argument('--pDropMax', default=0.2, type=float, help='Maximum dropout probability')
+    optArgs.add_argument('--stepFrac', default=0.5, type=float,
         help='Training iteration when dropout = pDropMax')
 
     # Metalearning params
     protoArgs = parser.add_argument_group('Protonet Parameters')
-    protoArgs.add_argument('-preTrainedModelDir', default=None, help='Embedding model to initialize training')
-    protoArgs.add_argument('-protoMinClasses', default=5, type=int, help='Minimum N-way')
-    protoArgs.add_argument('-protoMaxClasses', default=35, type=int, help='Maximum N-way')
-    protoArgs.add_argument('-protoEpisodesPerArk', default=25, type=int, help='Episodes per ark file')
-    protoArgs.add_argument('-totalEpisodes', default=100, type=int, help='Number of training episodes')
-    protoArgs.add_argument('-supportFrac', default=0.7, type=float, help='Fraction of samples as supports')
+    protoArgs.add_argument('--preTrainedModelDir', default=None, help='Embedding model to initialize training')
+    protoArgs.add_argument('--protoMinClasses', default=5, type=int, help='Minimum N-way')
+    protoArgs.add_argument('--protoMaxClasses', default=35, type=int, help='Maximum N-way')
+    protoArgs.add_argument('--protoEpisodesPerArk', default=25, type=int, help='Episodes per ark file')
+    protoArgs.add_argument('--totalEpisodes', default=100, type=int, help='Number of training episodes')
+    protoArgs.add_argument('--supportFrac', default=0.7, type=float, help='Fraction of samples as supports')
 
     return parser
 
