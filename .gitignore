@@ -12,3 +12,4 @@ RIRS_NOISES
 *.png
 *.pyc
 logs/
+models/
