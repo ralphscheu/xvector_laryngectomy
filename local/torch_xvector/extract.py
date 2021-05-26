@@ -20,15 +20,16 @@ import kaldi_python_io
 import socket
 from train_utils import *
 from collections import OrderedDict
-from torch.multiprocessing import Pool, Process, set_start_method
-torch.multiprocessing.set_start_method('spawn', force=True)
+import torch
+# from torch.multiprocessing import Pool, Process, set_start_method
+# torch.multiprocessing.set_start_method('spawn', force=True)
 
 def getSplitNum(text):
     return int(text.split('/')[-1].lstrip('split'))
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--modelType', default='xvecTDNN', help='Refer train_utils.py ')
+    parser.add_argument('--modelType', default='xvector', help='Model type to use')
     parser.add_argument('--numSpkrs', default=7323, type=int, help='Number of output labels for model')
     parser.add_argument('--layerName', default='fc1', help="DNN layer for embeddings")
     parser.add_argument('modelDirectory', help='Directory containing the model checkpoints')
@@ -49,7 +50,10 @@ def main():
         sys.exit(1)
 
     # Load model definition
-    net = eval('{}({}, p_dropout=0)'.format(args.modelType, args.numSpkrs))
+    if args.modelType == 'xvector':
+        net = eval('xvector({}, p_dropout=0)'.format(args.numSpkrs))
+    elif args.modelType == 'xvector-mha':
+        net = eval('xvector_mha({}, num_attn_heads=1, p_dropout=0)'.format(args.numSpkrs))
 
     checkpoint = torch.load(modelFile,map_location=torch.device('cuda'))
     new_state_dict = OrderedDict()

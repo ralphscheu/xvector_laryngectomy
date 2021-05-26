@@ -21,7 +21,7 @@ def setup(rank, args):
     dist.init_process_group(backend='nccl', init_method='env://', rank=rank, world_size=args.world_size)
     torch.backends.cudnn.benchmark = True
 
-    model = xvecTDNN(numSpkrs=args.numSpkrs, p_dropout=0, rank=rank).to(rank)
+    model = xvector(numSpkrs=args.numSpkrs, p_dropout=0, rank=rank).to(rank)
     model = DDP(model, device_ids=[rank])
     loss_fn = nn.CrossEntropyLoss()
     optimizer = optim.AdamW(model.parameters(), lr=args.baseLR)
