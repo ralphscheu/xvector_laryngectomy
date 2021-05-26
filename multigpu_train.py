@@ -24,7 +24,7 @@ def setup(rank, args):
     if args.modelType == 'xvector':
         model = xvector(numSpkrs=args.numSpkrs, rank=rank).to(rank)
     elif args.modelType == 'xvector-mha':
-        model = xvector_mha(numSpkrs=args.numSpkrs, num_attn_heads=1, rank=rank).to(rank)
+        model = xvector_mha(numSpkrs=args.numSpkrs, num_attn_heads=args.numAttnHeads, rank=rank).to(rank)
 
     model = DDP(model, device_ids=[rank])
     loss_fn = nn.CrossEntropyLoss()
