@@ -246,7 +246,7 @@ def getParams():
     parser.add_argument("--num_nodes", type=int, default=1)
 
     # General Parameters
-    parser.add_argument('--modelType', default='xvecTDNN', help='Model class. Check models.py')
+    parser.add_argument('--modelType', default='xvector', help='Model class. Check models.py')
     parser.add_argument('--featDim', default=30, type=int, help='Frame-level feature dimension')
     parser.add_argument('--trainingMode', default='init',
         help='(init) Train from scratch, (resume) Resume training, (finetune) Finetune a pretrained model')

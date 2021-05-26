@@ -109,7 +109,7 @@ def fc_embedding_layer(in_channels, out_channels, p_dropout, *args, **kwargs):
 class xvector(nn.Module):
     """ Baseline x-vector model using statistics pooling (mean+std) """
 
-    def __init__(self, numSpkrs, p_dropout, rank=0):
+    def __init__(self, numSpkrs, p_dropout=0, rank=0):
         super().__init__()
         self.rank = rank
 
@@ -148,8 +148,10 @@ class xvector(nn.Module):
 class xvector_mha(nn.Module):
     """ X-Vector model using Multihead Attention Pooling """
 
-    def __init__(self, numSpkrs, p_dropout, num_attn_heads):
+    def __init__(self, numSpkrs, num_attn_heads, p_dropout=0, rank=0):
         super().__init__()
+        self.rank = rank
+        
         self.tdnn1 = tdnn_layer(in_channels=30, out_channels=512, p_dropout=p_dropout, kernel_size=5, dilation=1)
         self.tdnn2 = tdnn_layer(in_channels=512, out_channels=512, p_dropout=p_dropout, kernel_size=5, dilation=2)
         self.tdnn3 = tdnn_layer(in_channels=512, out_channels=512, p_dropout=p_dropout, kernel_size=7, dilation=3)
@@ -166,7 +168,7 @@ class xvector_mha(nn.Module):
         self.fc2 = fc_embedding_layer(in_channels=512, out_channels=512, p_dropout=p_dropout)
         self.fc3 = nn.Linear(512,numSpkrs)
 
-    def forward(self, x, eps):
+    def forward(self, x, eps=1e-5):
         """Note: x must be (batch_size, feat_dim, chunk_len)"""
 
         x = self.tdnn1(x)
@@ -178,7 +180,7 @@ class xvector_mha(nn.Module):
         # add noise
         if self.training:
             shape = x.size()
-            noise = torch.cuda.FloatTensor(shape)
+            noise = torch.cuda.FloatTensor(shape).to(self.rank)
             torch.randn(shape, out=noise)
             x += noise*eps
 
@@ -191,11 +193,6 @@ class xvector_mha(nn.Module):
         x = self.fc2(x)
         x = self.fc3(x)
         return x
-
-
-
-
-
 
 
 class xvector_legacy(nn.Module):
@@ -256,4 +253,3 @@ class xvector_legacy(nn.Module):
         x = self.dropout_fc2(self.bn_fc2(F.relu(self.fc2(x))))
         x = self.fc3(x)
         return x
-

@@ -21,7 +21,11 @@ def setup(rank, args):
     dist.init_process_group(backend='nccl', init_method='env://', rank=rank, world_size=args.world_size)
     torch.backends.cudnn.benchmark = True
 
-    model = xvector(numSpkrs=args.numSpkrs, p_dropout=0, rank=rank).to(rank)
+    if args.modelType == 'xvector':
+        model = xvector(numSpkrs=args.numSpkrs, rank=rank).to(rank)
+    elif args.modelType == 'xvector-mha':
+        model = xvector_mha(numSpkrs=args.numSpkrs, num_attn_heads=1, rank=rank).to(rank)
+
     model = DDP(model, device_ids=[rank])
     loss_fn = nn.CrossEntropyLoss()
     optimizer = optim.AdamW(model.parameters(), lr=args.baseLR)
@@ -72,7 +76,7 @@ def cleanup():
 
 def train(rank, args):
     if rank == 0:
-        checkpoint_dir = './models/{}_event_{}'.format("xvector", datetime.now().strftime('%Y%m%dT%H%M%S'))
+        checkpoint_dir = './models/{}__event_{}'.format(args.modelType, datetime.utcnow().strftime('%Y%m%dT%H%M%S'))
         os.makedirs(checkpoint_dir)
     
     model, loss_fn, optimizer, lr_scheduler = setup(rank, args)
