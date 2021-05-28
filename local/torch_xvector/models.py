@@ -117,9 +117,9 @@ class xvector(nn.Module):
         self.tdnn2 = tdnn_layer(in_channels=512, out_channels=512, p_dropout=p_dropout, kernel_size=5, dilation=2)
         self.tdnn3 = tdnn_layer(in_channels=512, out_channels=512, p_dropout=p_dropout, kernel_size=7, dilation=3)
         self.tdnn4 = tdnn_layer(in_channels=512, out_channels=512, p_dropout=p_dropout, kernel_size=1, dilation=1)
-        self.tdnn5 = tdnn_layer(in_channels=512, out_channels=1024, p_dropout=p_dropout, kernel_size=1, dilation=1)
+        self.tdnn5 = tdnn_layer(in_channels=512, out_channels=1500, p_dropout=p_dropout, kernel_size=1, dilation=1)
 
-        self.fc1 = fc_embedding_layer(in_channels=2048, out_channels=512, p_dropout=p_dropout)
+        self.fc1 = fc_embedding_layer(in_channels=3000, out_channels=512, p_dropout=p_dropout)
         self.fc2 = fc_embedding_layer(in_channels=512, out_channels=512, p_dropout=p_dropout)
         self.fc3 = nn.Linear(512, numSpkrs)
 
