@@ -39,6 +39,8 @@ cuda_device_id=0
 
 stage=0
 modelDir=models/`ls models/ -t | head -n1`
+modelType=xvector
+
 . ./utils/parse_options.sh
 
 # X-vector directories
@@ -246,11 +248,13 @@ fi
 if [ $stage -eq 8 ]; then
   echo "Stage $stage: Extract X-Vectors"
 
-  echo CUDA_VISIBLE_DEVICES=$cuda_device_id python local/torch_xvector/extract.py $modelDir $trainFeatDir $trainXvecDir
-  CUDA_VISIBLE_DEVICES=$cuda_device_id python local/torch_xvector/extract.py $modelDir $trainFeatDir $trainXvecDir
+  CUDA_VISIBLE_DEVICES=$cuda_device_id python local/torch_xvector/extract.py \
+    --modelType $modelType \
+    $modelDir $trainFeatDir $trainXvecDir
 
-  echo CUDA_VISIBLE_DEVICES=$cuda_device_id python local/torch_xvector/extract.py $modelDir $testFeatDir $testXvecDir
-  CUDA_VISIBLE_DEVICES=$cuda_device_id python local/torch_xvector/extract.py $modelDir $testFeatDir $testXvecDir
+  CUDA_VISIBLE_DEVICES=$cuda_device_id python local/torch_xvector/extract.py \
+    --modelType $modelType \
+    $modelDir $testFeatDir $testXvecDir
 fi
 
 

@@ -10,7 +10,7 @@ numAttnHeads=12
 . ./utils/parse_options.sh
 
 CUDA_VISIBLE_DEVICES=6,7 \
-$train_cmd logs/${modelType}__event_$(date '+%Y%m%dT%H%M%S').log \
+$train_cmd logs/${modelType}__event_$(date -u '+%Y%m%dT%H%M%S').log \
     python3 multigpu_train.py \
         --modelType $modelType \
         --numAttnHeads $numAttnHeads \
