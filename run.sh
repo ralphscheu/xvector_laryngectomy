@@ -249,6 +249,7 @@ if [ $stage -eq 8 ]; then
   echo "Stage $stage: Extract X-Vectors"
 
   CUDA_VISIBLE_DEVICES=$cuda_device_id python local/torch_xvector/extract.py \
+    --numSplits 400 \
     --modelType $modelType \
     $modelDir $trainFeatDir $trainXvecDir
 
