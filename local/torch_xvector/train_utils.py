@@ -355,9 +355,8 @@ def par_core_extractXvectors(inFeatsScp, outXvecArk, outXvecScp, net, layerName)
         with ReadHelper('scp:%s'%inFeatsScp) as reader:
             for key, mat in reader:
                 if mat.shape[0] > 14000:  # exclude a few outliers that are longer than ~5m45s (hotfix to prevent gpu memory getting full)
-                    print(mat.shape[0])
+                    print(key, mat.shape[0], "excluded: longer than 14000 frames")
                     continue
 
-                out = net(x=torch.Tensor(mat).permute(1,0).unsqueeze(0).cuda(),
-                          eps=0)
+                out = net(x=torch.Tensor(mat).permute(1,0).unsqueeze(0).cuda(), eps=0)
                 writer.write(key, np.squeeze(activation[layerName].cpu().numpy()))

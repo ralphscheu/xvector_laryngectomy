@@ -38,14 +38,19 @@ nproc=1
 cuda_device_id=0
 
 stage=0
-modelDir=models/`ls models/ -t | head -n1`
 modelType=xvector
 
 . ./utils/parse_options.sh
 
+modelDir=models/$nnet_name
+
 # X-vector directories
 trainXvecDir=xvectors/$nnet_name/train
 testXvecDir=xvectors/$nnet_name/test
+
+echo "trainXvecDir: $trainXvecDir"
+echo "testXvecDir:  $testXvecDir"
+echo "modelDir:     $modelDir"
 
 if [ $stage -eq 0 ]; then
   local/make_voxceleb2.pl $voxceleb2_root dev data/voxceleb2_train
@@ -252,6 +257,8 @@ if [ $stage -eq 8 ]; then
     --numSplits 400 \
     --modelType $modelType \
     $modelDir $trainFeatDir $trainXvecDir
+  # concat separate scp files into one
+  cat $trainXvecDir/split400/xvector_split400_*.scp > $trainXvecDir/xvector.scp
 
   CUDA_VISIBLE_DEVICES=$cuda_device_id python local/torch_xvector/extract.py \
     --modelType $modelType \
@@ -275,6 +282,7 @@ if [ $stage -eq 9 ]; then
     "ark:ivector-subtract-global-mean scp:$trainXvecDir/xvector.scp ark:- |" \
     ark:$trainFeatDir/utt2spk $trainXvecDir/transform.mat
 
+  echo "Train PLDA..."
   $train_cmd $trainXvecDir/log/plda.log \
     ivector-compute-plda ark:$trainFeatDir/spk2utt \
     "ark:ivector-subtract-global-mean scp:$trainXvecDir/xvector.scp ark:- | transform-vec $trainXvecDir/transform.mat ark:- ark:- | ivector-normalize-length ark:-  ark:- |" \
