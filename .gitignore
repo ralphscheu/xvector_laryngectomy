@@ -13,3 +13,4 @@ RIRS_NOISES
 *.pyc
 logs/
 models/
+plots/

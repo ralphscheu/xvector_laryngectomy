@@ -146,11 +146,6 @@ def main():
             'speaker_group': key.split('_', maxsplit=1)[0], 
             'embedding': mat}, ignore_index=True)
 
-    # outliers = get_outliers(xvectors.loc[xvectors.speaker_group == 'LARY'])
-    # for _, emb in outliers.iterrows():
-    #     pass
-    # print("outliers:", outliers.shape)
-
     print("Reducing dimensions using t-SNE...")
     xvectors.embedding = list(TSNE(n_components=2).fit_transform(np.vstack(xvectors.embedding.values)))
 
@@ -160,8 +155,8 @@ def main():
 
 
     # plot colored speakergroups with and w/o partial resections
-    # plot_speakergroups(xvectors, "pathologic_voices_CTRL_LARY_annotated", args.output_dir, annotate_outliers=True, include_PARE=False)
-    plot_speakergroups(xvectors, "pathologic_voices_CTRL_PARE_LARY_annotated", args.output_dir, annotate_outliers=True, include_PARE=True)
+    plot_speakergroups(xvectors, "pathologic_voices_CTRL_LARY", args.output_dir, include_PARE=False)
+    plot_speakergroups(xvectors, "pathologic_voices_CTRL_PARE_LARY", args.output_dir, include_PARE=True)
 
     # plot_scores_histograms(mean_scores_LARY, mean_scores_CTRL)
     
