@@ -39,6 +39,7 @@ cuda_device_id=0
 
 stage=0
 modelType=xvector
+numAttnHeads=5
 
 . ./utils/parse_options.sh
 
@@ -242,16 +243,27 @@ fi
 if [ $stage -eq 7 ]; then
   echo "Stage $stage: Train the model"
 
+  # CUDA_VISIBLE_DEVICES=$cuda_device_id \
+  #   $train_cmd logs/${modelType}__$(date -u '+%Y%m%dT%H%M%S').log \
+  #     python3 local/torch_xvector/train.py \
+  #         --modelType $modelType \
+  #         --numAttnHeads $numAttnHeads \
+  #         --batchSize 32 \
+  #         exp/torch_xvector_1a/egs
+
+
   CUDA_VISIBLE_DEVICES=$cuda_device_id \
-    $train_cmd logs/latest_train.log \
+    $train_cmd logs/${modelType}__$(date -u '+%Y%m%dT%H%M%S')_train_old.log \
       python -m torch.distributed.launch --nproc_per_node=$nproc \
-        local/torch_xvector/train.py --modelType xvecTDNN_MHAttn --numAttnHeads 1 $nnet_dir/egs
+        local/torch_xvector/train_old.py \
+          --modelType $modelType \
+          --numAttnHeads $numAttnHeads \
+          exp/torch_xvector_1a/egs
 fi
 
-# modelDir=models/`ls models/ -t | head -n1`
 
 if [ $stage -eq 8 ]; then
-  echo "Stage $stage: Extract X-Vectors"
+  echo "Stage $stage: Extract X-Vectors (+ visualize)"
 
   CUDA_VISIBLE_DEVICES=$cuda_device_id python local/torch_xvector/extract.py \
     --numSplits 400 \
@@ -263,10 +275,18 @@ if [ $stage -eq 8 ]; then
   CUDA_VISIBLE_DEVICES=$cuda_device_id python local/torch_xvector/extract.py \
     --modelType $modelType \
     $modelDir $testFeatDir $testXvecDir
+
+
+  $train_cmd $testXvecDir/log/save_xvec_for_plot.log \
+    ivector-normalize-length \
+      "ark:ivector-subtract-global-mean $trainXvecDir/mean.vec scp:$testXvecDir/xvector.scp ark:- | transform-vec $trainXvecDir/transform.mat ark:- ark:- |" \
+      ark,scp:$testXvecDir/xvec_for_plot.ark,$testXvecDir/xvec_for_plot.scp
+
+  python local/plot_xvec.py $testXvecDir/xvec_for_plot.scp voxceleb1_test ./plots --dim-reduction-method=tsne
 fi
 
 
-# STAGE 9: COMPUTE MEAN VECTORS, TRAIN PLDA MODEL
+# STAGE 9: COMPUTE MEAN VECTORS, TRAIN PLDA MODEL, COMPUTE SCORES
 if [ $stage -eq 9 ]; then
   # Reproducing voxceleb results
   echo "Compute the mean vector for centering the evaluation xvectors..."
@@ -287,24 +307,9 @@ if [ $stage -eq 9 ]; then
     ivector-compute-plda ark:$trainFeatDir/spk2utt \
     "ark:ivector-subtract-global-mean scp:$trainXvecDir/xvector.scp ark:- | transform-vec $trainXvecDir/transform.mat ark:- ark:- | ivector-normalize-length ark:-  ark:- |" \
     $trainXvecDir/plda
-fi
 
 
-# STAGE 10: PLOT XVECTORS FOR TEST UTTERANCES
-if [ $stage -eq 10 ]; then
-  $train_cmd $testXvecDir/log/save_xvec_for_plot.log \
-    ivector-normalize-length \
-      "ark:ivector-subtract-global-mean $trainXvecDir/mean.vec scp:$testXvecDir/xvector.scp ark:- | transform-vec $trainXvecDir/transform.mat ark:- ark:- |" \
-      ark,scp:$testXvecDir/xvec_for_plot.ark,$testXvecDir/xvec_for_plot.scp
-
-  python local/plot_xvec.py $testXvecDir/xvec_for_plot.scp voxceleb1_test ./plots --dim-reduction-method=tsne
-fi
-
-
-# STAGE 11: PLDA BASED SCORING
-if [ $stage -eq 11 ]; then
-  echo "Stage $stage: Compute scores using PLDA"
-  
+  echo "PLDA scoring:"
   scores_dir=$testXvecDir/scores_plda
   $train_cmd $testXvecDir/log/plda_scoring.log \
     ivector-plda-scoring --normalize-length=true \
@@ -320,19 +325,15 @@ if [ $stage -eq 11 ]; then
   echo "minDCF(p-target=0.01): $mindcf1"
   echo "minDCF(p-target=0.001): $mindcf2"
 
-fi
 
-
-# STAGE 12: COSINE SIMILARITY BASED SCORING
-if [ $stage -eq 12 ]; then
-  echo "Stage $stage: Compute scores using cosine distances"
-
+  echo "Cosine scoring:"
   scores_dir=$testXvecDir/scores_cosine
   cat $voxceleb1_trials | awk '{print $1, $2}' | \
-    ivector-compute-dot-products - \
-      "ark:ivector-subtract-global-mean $trainXvecDir/mean.vec scp:$testXvecDir/xvector.scp ark:- | transform-vec $trainXvecDir/transform.mat ark:- ark:- | ivector-normalize-length ark:- ark:- |" \
-      "ark:ivector-subtract-global-mean $trainXvecDir/mean.vec scp:$testXvecDir/xvector.scp ark:- | transform-vec $trainXvecDir/transform.mat ark:- ark:- | ivector-normalize-length ark:- ark:- |" \
-      $scores_dir
+    $train_cmd $testXvecDir/log/cosine_scoring.log \
+      ivector-compute-dot-products - \
+        "ark:ivector-subtract-global-mean $trainXvecDir/mean.vec scp:$testXvecDir/xvector.scp ark:- | transform-vec $trainXvecDir/transform.mat ark:- ark:- | ivector-normalize-length ark:- ark:- |" \
+        "ark:ivector-subtract-global-mean $trainXvecDir/mean.vec scp:$testXvecDir/xvector.scp ark:- | transform-vec $trainXvecDir/transform.mat ark:- ark:- | ivector-normalize-length ark:- ark:- |" \
+        $scores_dir
 
   eer=`compute-eer <(local/prepare_for_eer.py $voxceleb1_trials $scores_dir) #2> /dev/null`
   mindcf1=`sid/compute_min_dcf.py --c-miss 10 --p-target 0.01 $scores_dir $voxceleb1_trials #2> /dev/null`
@@ -342,6 +343,5 @@ if [ $stage -eq 12 ]; then
   echo "minDCF(p-target=0.01): $mindcf1"
   echo "minDCF(p-target=0.001): $mindcf2"
 fi
-
 
 exit 0;

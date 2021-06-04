@@ -3,16 +3,13 @@
 . ./path.sh
 set -e
 
-modelDir=models/`ls models/ -t | head -n1`  # load latest model by default
-
-# temporary override: use modelType_xvecTDNN_event_20210409T145152 by default
-# TODO: remove temporary model override
-modelDir=models/modelType_xvecTDNN_event_20210409T145152
-
-cuda_device_id=0
-trainXvecDir=xvectors/torch_xvector_1a/train  # xvectors of training set
+nnet_name=xvector__20210409T145152  # default to baseline model
+cuda_device_id=0  # default to first GPU in system
 
 . ./utils/parse_options.sh
+
+modelDir=models/$nnet_name
+trainXvecDir=xvectors/$nnet_name/train
 
 
 # create datasets
