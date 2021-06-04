@@ -7,6 +7,7 @@ from sklearn.model_selection import LeaveOneOut, KFold, cross_val_score, cross_v
 from sklearn.preprocessing import StandardScaler
 from sklearn.pipeline import make_pipeline
 from scipy.stats import pearsonr
+import argparse
 
 
 def get_mean_scores(f_crits, f_scores):
@@ -27,24 +28,37 @@ def get_extracted_xvectors(scp_input_string):
     return xvectors_df
 
 if __name__ == "__main__":
-    xvectors = get_extracted_xvectors("scp:xvectors/pathologic_voices_CTRL_LARY/xvector.scp")
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--nnet_name', default="xvector", help='nnet name')
+    args = parser.parse_args()
+
+    xvectors = get_extracted_xvectors("scp:xvectors/{}/pathologic_voices/xvector.scp".format(args.nnet_name))
     scores_LARY = get_mean_scores("/mnt/speechdata/pathologic_voices/laryng41/labels/laryng41.raters5.crits", "/mnt/speechdata/pathologic_voices/laryng41/labels/laryng41.raters5.scores")[['utt', 'overall']]
+    scores_PARE = get_mean_scores("/mnt/speechdata/pathologic_voices/teilres85/labels/teilres85.experts1.crits", "/mnt/speechdata/pathologic_voices/teilres85/labels/teilres85.experts1.scores")[['utt', 'overall']]
     scores_CTRL = get_mean_scores("/mnt/speechdata/pathologic_voices/altersstimme110_cut/labels/altersstimme110_cut.logos.crits", "/mnt/speechdata/pathologic_voices/altersstimme110_cut/labels/altersstimme110_cut.logos.scores")[['utt', 'overall']]
+    df = xvectors.merge(pd.concat([scores_LARY, scores_CTRL, scores_PARE]), on='utt')
+    
 
-    df = xvectors.merge(pd.concat([scores_LARY, scores_CTRL]), on='utt')
-    df = df.loc[df.speaker_group == "LARY"]
-    X, y = np.vstack(df.embedding.values), df.overall.values
-
-    X_scaler, y_scaler = StandardScaler(), StandardScaler()
-    X_scaled, y_scaled = X_scaler.fit_transform(X), y_scaler.fit_transform(y.reshape(-1, 1))
+    print("\nLARYNG group")
+    X, y = np.vstack(df.loc[df.speaker_group == "LARY"].embedding.values), df.loc[df.speaker_group == "LARY"].overall.values
+    cvscores = pd.DataFrame(cross_validate(LinearRegression(), X, y, cv=LeaveOneOut(), scoring=('neg_mean_squared_error', 'neg_mean_absolute_error'))).drop(columns=['fit_time', 'score_time'])
+    X_scaled, y_scaled = StandardScaler().fit_transform(X), StandardScaler().fit_transform(y.reshape(-1, 1))
     print("Pearson Correlation (r, p-value):", pearsonr(X_scaled.mean(axis=1), y_scaled.mean(axis=1)))
+    print(cvscores.describe().loc[['mean', 'std']])
+    
 
-    # y = StandardScaler().fit_transform(y.reshape(-1,1))
-    # y = (y-5)/5
-
-    linreg = LinearRegression()
-    cvscores = pd.DataFrame(cross_validate(linreg, X, y, cv=LeaveOneOut(), scoring=('neg_mean_squared_error', 'neg_mean_absolute_error'))).drop(columns=['fit_time', 'score_time'])
-    print("\n=== LOO - laryng")
+    print("\nPARE group")
+    X, y = np.vstack(df.loc[df.speaker_group == "PARE"].embedding.values), df.loc[df.speaker_group == "PARE"].overall.values
+    cvscores = pd.DataFrame(cross_validate(LinearRegression(), X, y, cv=LeaveOneOut(), scoring=('neg_mean_squared_error', 'neg_mean_absolute_error'))).drop(columns=['fit_time', 'score_time'])
+    X_scaled, y_scaled = StandardScaler().fit_transform(X), StandardScaler().fit_transform(y.reshape(-1, 1))
+    print("Pearson Correlation (r, p-value):", pearsonr(X_scaled.mean(axis=1), y_scaled.mean(axis=1)))
     print(cvscores.describe().loc[['mean', 'std']])
 
 
+    print("\nCTRL group")
+    X, y = np.vstack(df.loc[df.speaker_group == "CTRL"].embedding.values), df.loc[df.speaker_group == "CTRL"].overall.values
+    cvscores = pd.DataFrame(cross_validate(LinearRegression(), X, y, cv=LeaveOneOut(), scoring=('neg_mean_squared_error', 'neg_mean_absolute_error'))).drop(columns=['fit_time', 'score_time'])
+    X_scaled, y_scaled = StandardScaler().fit_transform(X), StandardScaler().fit_transform(y.reshape(-1, 1))
+    X_scaled, y_scaled = StandardScaler().fit_transform(X), StandardScaler().fit_transform(y.reshape(-1, 1))
+    print("Pearson Correlation (r, p-value):", pearsonr(X_scaled.mean(axis=1), y_scaled.mean(axis=1)))
+    print(cvscores.describe().loc[['mean', 'std']])
