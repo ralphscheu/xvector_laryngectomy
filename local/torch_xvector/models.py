@@ -156,15 +156,15 @@ class xvector_mha(nn.Module):
         self.tdnn2 = tdnn_layer(in_channels=512, out_channels=512, p_dropout=p_dropout, kernel_size=5, dilation=2)
         self.tdnn3 = tdnn_layer(in_channels=512, out_channels=512, p_dropout=p_dropout, kernel_size=7, dilation=3)
         self.tdnn4 = tdnn_layer(in_channels=512, out_channels=512, p_dropout=p_dropout, kernel_size=1, dilation=1)
-        self.tdnn5 = tdnn_layer(in_channels=512, out_channels=1024, p_dropout=p_dropout, kernel_size=1, dilation=1)
+        self.tdnn5 = tdnn_layer(in_channels=512, out_channels=1500, p_dropout=p_dropout, kernel_size=1, dilation=1)
 
-        self.attn_input_size = 1024
+        self.attn_input_size = 1500
         self.mh_attn = MultiHeadAttention(
             key_size=self.attn_input_size, query_size=self.attn_input_size, value_size=self.attn_input_size,
-            num_hiddens=1024, num_heads=num_attn_heads
+            num_hiddens=1500, num_heads=num_attn_heads
         )
 
-        self.fc1 = fc_embedding_layer(in_channels=1024, out_channels=512, p_dropout=p_dropout)
+        self.fc1 = fc_embedding_layer(in_channels=1500, out_channels=512, p_dropout=p_dropout)
         self.fc2 = fc_embedding_layer(in_channels=512, out_channels=512, p_dropout=p_dropout)
         self.fc3 = nn.Linear(512,numSpkrs)
 
@@ -193,21 +193,6 @@ class xvector_mha(nn.Module):
         x = self.fc2(x)
         x = self.fc3(x)
         return x
-
-
-class xvector_mha_1500(xvector_mha):
-
-    def __init__(self, numSpkrs, num_attn_heads, p_dropout=0, rank=0):
-        super().__init__(numSpkrs, num_attn_heads, p_dropout, rank)
-
-        self.tdnn5 = tdnn_layer(in_channels=512, out_channels=1500, p_dropout=p_dropout, kernel_size=1, dilation=1)
-        self.attn_input_size = 1500
-        self.mh_attn = MultiHeadAttention(
-            key_size=self.attn_input_size, query_size=self.attn_input_size, value_size=self.attn_input_size,
-            num_hiddens=1500, num_heads=num_attn_heads
-        )
-        self.fc1 = fc_embedding_layer(in_channels=1500, out_channels=512, p_dropout=p_dropout)
-
 
 
 class xvector_legacy(nn.Module):
