@@ -21,6 +21,7 @@ import kaldi_python_io
 from kaldiio import ReadHelper
 from torch.utils.data import Dataset, IterableDataset
 from collections import OrderedDict
+from models import xvector, xvector_mha
 
 
 def readHdf5File_full(fileName):
@@ -311,8 +312,12 @@ def computeValidAccuracy(args, modelDir):
     """ Computes frame-level validation accuracy """
     modelFile = max(glob.glob(modelDir+'/*'), key=os.path.getctime)
     # Load the model
-    net = eval('{}(numSpkrs={}, p_dropout=0, num_attn_heads=1)'.format(args.modelType, args.numSpkrs))
 
+    if args.modelType == 'xvector':
+        net = xvector(numSpkrs=args.numSpkrs, rank=args.local_rank).to(args.local_rank)
+    elif args.modelType == 'xvector-mha':
+        net = xvector_mha(numSpkrs=args.numSpkrs, num_attn_heads=args.numAttnHeads, rank=args.local_rank).to(args.local_rank)
+    
     checkpoint = torch.load(modelFile,map_location=torch.device('cuda'))
     new_state_dict = OrderedDict()
     for k, v in checkpoint['model_state_dict'].items():
@@ -320,9 +325,9 @@ def computeValidAccuracy(args, modelDir):
             new_state_dict[k[7:]] = v  # ugly fix to remove 'module' from key
         else:
             new_state_dict[k] = v
+            
     # load params
     net.load_state_dict(new_state_dict)
-    net = net.cuda()
     net.eval()
 
     correct, incorrect = 0, 0

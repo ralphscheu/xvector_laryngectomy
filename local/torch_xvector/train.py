@@ -1,30 +1,29 @@
-import os
-import sys
-import tempfile
+import os, sys, logging, math, time
 import torch
 import torch.distributed as dist
 import torch.nn as nn
 import torch.optim as optim
-from torch.nn import functional as F
 import torch.multiprocessing as mp
 from torch.nn.parallel import DistributedDataParallel as DDP
-from local.torch_xvector.train_utils import nnet3EgsDLNonIterable, nnet3EgsDL
 from torch.utils.data.distributed import DistributedSampler
 from torch.utils.data import DataLoader
-import torchvision
 from datetime import datetime
-from local.torch_xvector.models import *
-from local.torch_xvector.train_utils import getParams
+from models import xvector, xvector_mha
+from train_utils import nnet3EgsDLNonIterable, getParams, computeValidAccuracy
+import numpy as np
 
 
 def setup(rank, args):
     dist.init_process_group(backend='nccl', init_method='env://', rank=rank, world_size=args.world_size)
     torch.backends.cudnn.benchmark = True
 
+    print("Initializing model...")
     if args.modelType == 'xvector':
         model = xvector(numSpkrs=args.numSpkrs, rank=rank).to(rank)
     elif args.modelType == 'xvector-mha':
         model = xvector_mha(numSpkrs=args.numSpkrs, num_attn_heads=args.numAttnHeads, rank=rank).to(rank)
+
+    print(model)
 
     model = DDP(model, device_ids=[rank])
     loss_fn = nn.CrossEntropyLoss()
@@ -38,7 +37,7 @@ def setup(rank, args):
                             final_div_factor=1e+3,
                             total_steps=total_steps*numBatchesPerArk,
                             pct_start=0.15)
-    return model, loss_fn, optimizer, lr_scheduler
+    return model, loss_fn, optimizer, lr_scheduler, numBatchesPerArk
 
 def save_checkpoint(step, archive_id, model, optimizer, loss, checkpoint_dir, args):
     torch.save({
@@ -76,15 +75,17 @@ def cleanup():
 
 def train(rank, args):
     if rank == 0:
-        checkpoint_dir = './models/{}__event_{}'.format(args.modelType, datetime.utcnow().strftime('%Y%m%dT%H%M%S'))
+        checkpoint_dir = './models/{}__{}'.format(args.modelType, datetime.utcnow().strftime('%Y%m%dT%H%M%S'))
         os.makedirs(checkpoint_dir)
     
-    model, loss_fn, optimizer, lr_scheduler = setup(rank, args)
+    model, loss_fn, optimizer, lr_scheduler, numBatchesPerArk = setup(rank, args)
     
-    step = 0
-    # logging_loss = 0.0
     total_steps = args.numEpochs * args.numArchives
-    #  total_steps = 2
+    batchI, step = 0, 0
+    logging_loss = 0.0
+    #####
+    total_steps = 50
+    #####
     while step < total_steps:
         starttime_archive = datetime.utcnow()
         archive_id = step % args.numArchives + 1
@@ -92,31 +93,70 @@ def train(rank, args):
             print("\nProcessing archive {} (epoch {})".format( archive_id, int(max(1,math.ceil(step/args.numArchives)))))
 
         dataloader = get_dist_dataloader("{}/egs.{}.ark".format(args.featDir, archive_id), args, rank)
-        current_batch = 0
         for _, (X,y) in dataloader:
             X = X['matrix'].to(rank)
             y = y['matrix'][0][0][0].to(rank)
 
-            optimizer.zero_grad()
-            outputs = model(X.permute(0,2,1))
-            loss = loss_fn(outputs, y)
-            loss.backward()
-            optimizer.step()
-            lr_scheduler.step()  # Update Learning Rate
+            try:
+                assert max(y) < args.numSpkrs and min(y) >= 0
+            except:
+                print('Read an out of range value at iter %d' %iter)
+                continue
+            if torch.isnan(X).any():
+                print('Read a nan value at iter %d' %iter)
+                continue
 
-            # logging_loss += loss.item()
-            current_batch += 1
+            loss = None
+            accumulateStepSize = 4
+            preFetchBatchI = 0  # this counter within the prefetched batches only
 
+            print("preFetchBatchI", preFetchBatchI)
+            print("int(len(y) / args.batchSize)", int(len(y) / args.batchSize))
+            print("accumulateStepSize", accumulateStepSize)
+            print("int(len(y) / args.batchSize) - accumulateStepSize", int(len(y) / args.batchSize) - accumulateStepSize)
+            while preFetchBatchI < int(len(y) / args.batchSize) - accumulateStepSize:
+
+                # Accumulated gradients used
+                optimizer.zero_grad()
+                for _ in range(accumulateStepSize):
+                    batchI += 1
+                    preFetchBatchI += 1
+
+                    # forward step
+                    outputs = model(X[preFetchBatchI * args.batchSize : (preFetchBatchI+1) * args.batchSize,:,:].permute(0,2,1))
+                
+                    # calculate loss
+                    loss = loss_fn(outputs, y[preFetchBatchI*args.batchSize:(preFetchBatchI+1)*args.batchSize].squeeze())
+
+                    if np.isnan(loss.item()):
+                        print('Nan encountered at iter %d. Exiting..' %iter)
+                        sys.exit(1)
+
+                    # backpropagation
+                    loss.backward()
+                    logging_loss += loss.item()
+
+                optimizer.step()
+                lr_scheduler.step()  # Update Learning Rate
+
+        # Log and save checkpoint after finishing archive file
         if rank == 0:
             print('Archive processing time: {}'.format(datetime.utcnow() - starttime_archive))
-            save_checkpoint(step, archive_id, model, optimizer, loss, checkpoint_dir, args)
-            # print('Avg Loss/batch: %1.3f' % (logging_loss / int(args.numEgsPerArk/args.batchSize)))
+            logging_loss = 0.0
+
+            # Compute validation loss, update LR if using plateau rule
+            # valAcc = computeValidAccuracy(args, checkpoint_dir)
+            # logger.info('Validation accuracy is %1.2f precent' %(valAcc))
+
+            if loss:
+                save_checkpoint(step, archive_id, model, optimizer, loss, checkpoint_dir, args)
+            else:
+                sys.exit("ERROR: loss = None")
 
         p_drop = update_dropout(model, step, total_steps, args)
         if rank == 0:
             print('Dropout updated to {}'.format(p_drop))
 
-        # logging_loss = 0.0
         step += 1
 
     cleanup()
