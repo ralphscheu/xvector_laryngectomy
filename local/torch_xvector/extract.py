@@ -17,7 +17,7 @@ import glob
 import argparse
 import pandas as pd
 import numpy as np
-from models import xvector, xvector_mha, xvector_mha_1500
+from models import xvector, xvector_mha
 import kaldi_python_io
 import socket
 from train_utils import *
@@ -35,12 +35,15 @@ if __name__ == "__main__":
     # Extract params
     parser.add_argument('--numSplits', default=None, help='number of feature splits')
     parser.add_argument('--modelType', default='xvector', help='Model type to use')
+    parser.add_argument('--numAttnHeads', default=5, type=int, help="Number of attention heads")
     parser.add_argument('--numSpkrs', default=7323, type=int, help='Number of output labels for model')
     parser.add_argument('--layerName', default='fc1', help="DNN layer for embeddings")
     parser.add_argument('modelDirectory', help='Directory containing the model checkpoints')
     parser.add_argument('featDir', help='Directory containing features ready for extraction')
     parser.add_argument('embeddingDir', help='Output directory')
     args = parser.parse_args()
+
+    print(args)
 
     # torch.multiprocessing.set_start_method('spawn', force=True)
 
@@ -60,9 +63,7 @@ if __name__ == "__main__":
     if args.modelType == 'xvector':
         net = xvector(args.numSpkrs, p_dropout=0)
     elif args.modelType == 'xvector-mha':
-        net = xvector_mha(args.numSpkrs, num_attn_heads=1, p_dropout=0)
-    elif args.modelType == 'xvector-mha-1500':
-        net = xvector_mha_1500(args.numSpkrs, num_attn_heads=1, p_dropout=0)
+        net = xvector_mha(args.numSpkrs, num_attn_heads=args.numAttnHeads, p_dropout=0)
 
     checkpoint = torch.load(modelFile,map_location=torch.device('cuda'))
     new_state_dict = OrderedDict()

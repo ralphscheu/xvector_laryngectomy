@@ -268,22 +268,17 @@ if [ $stage -eq 8 ]; then
   CUDA_VISIBLE_DEVICES=$cuda_device_id python local/torch_xvector/extract.py \
     --numSplits 400 \
     --modelType $modelType \
+    --numAttnHeads $numAttnHeads \
     $modelDir $trainFeatDir $trainXvecDir
   # concat separate scp files into one
   cat $trainXvecDir/split400/xvector_split400_*.scp > $trainXvecDir/xvector.scp
 
   CUDA_VISIBLE_DEVICES=$cuda_device_id python local/torch_xvector/extract.py \
     --modelType $modelType \
+    --numAttnHeads $numAttnHeads \
     $modelDir $testFeatDir $testXvecDir
-
-
-  $train_cmd $testXvecDir/log/save_xvec_for_plot.log \
-    ivector-normalize-length \
-      "ark:ivector-subtract-global-mean $trainXvecDir/mean.vec scp:$testXvecDir/xvector.scp ark:- | transform-vec $trainXvecDir/transform.mat ark:- ark:- |" \
-      ark,scp:$testXvecDir/xvec_for_plot.ark,$testXvecDir/xvec_for_plot.scp
-
-  python local/plot_xvec.py $testXvecDir/xvec_for_plot.scp voxceleb1_test ./plots --dim-reduction-method=tsne
 fi
+
 
 
 # STAGE 9: COMPUTE MEAN VECTORS, TRAIN PLDA MODEL, COMPUTE SCORES
@@ -308,7 +303,18 @@ if [ $stage -eq 9 ]; then
     "ark:ivector-subtract-global-mean scp:$trainXvecDir/xvector.scp ark:- | transform-vec $trainXvecDir/transform.mat ark:- ark:- | ivector-normalize-length ark:-  ark:- |" \
     $trainXvecDir/plda
 
+  
+  
+  $train_cmd $testXvecDir/log/save_xvec_for_plot.log \
+    ivector-normalize-length \
+      "ark:ivector-subtract-global-mean $trainXvecDir/mean.vec scp:$testXvecDir/xvector.scp ark:- | transform-vec $trainXvecDir/transform.mat ark:- ark:- |" \
+      ark,scp:$testXvecDir/xvec_for_plot.ark,$testXvecDir/xvec_for_plot.scp
 
+  python local/plot_xvec.py $testXvecDir/xvec_for_plot.scp voxceleb1_test ./plots --dim-reduction-method=tsne
+
+fi
+
+if [ $stage -eq 10 ]; then
   echo "PLDA scoring:"
   scores_dir=$testXvecDir/scores_plda
   $train_cmd $testXvecDir/log/plda_scoring.log \
@@ -333,7 +339,7 @@ if [ $stage -eq 9 ]; then
       ivector-compute-dot-products - \
         "ark:ivector-subtract-global-mean $trainXvecDir/mean.vec scp:$testXvecDir/xvector.scp ark:- | transform-vec $trainXvecDir/transform.mat ark:- ark:- | ivector-normalize-length ark:- ark:- |" \
         "ark:ivector-subtract-global-mean $trainXvecDir/mean.vec scp:$testXvecDir/xvector.scp ark:- | transform-vec $trainXvecDir/transform.mat ark:- ark:- | ivector-normalize-length ark:- ark:- |" \
-        $scores_dir
+        $scores_dir0
 
   eer=`compute-eer <(local/prepare_for_eer.py $voxceleb1_trials $scores_dir) #2> /dev/null`
   mindcf1=`sid/compute_min_dcf.py --c-miss 10 --p-target 0.01 $scores_dir $voxceleb1_trials #2> /dev/null`
