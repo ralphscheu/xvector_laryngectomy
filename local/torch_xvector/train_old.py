@@ -36,7 +36,7 @@ def train(args):
         print(net)
         print()
 
-    criterion = nn.CrossEntropyLoss()
+    criterion = nn.NLLLoss()
     optimizer = torch.optim.Adam(net.parameters(), lr=args.baseLR)
 
     net.to(device)
