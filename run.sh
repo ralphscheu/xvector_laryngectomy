@@ -243,21 +243,13 @@ fi
 if [ $stage -eq 7 ]; then
   echo "Stage $stage: Train the model"
 
-  # CUDA_VISIBLE_DEVICES=$cuda_device_id \
-  #   $train_cmd logs/${modelType}__$(date -u '+%Y%m%dT%H%M%S').log \
-  #     python3 local/torch_xvector/train.py \
-  #         --modelType $modelType \
-  #         --numAttnHeads $numAttnHeads \
-  #         --batchSize 32 \
-  #         exp/torch_xvector_1a/egs
-
-
   CUDA_VISIBLE_DEVICES=$cuda_device_id \
-    $train_cmd logs/${modelType}__$(date -u '+%Y%m%dT%H%M%S')_train_old.log \
+    $train_cmd logs/${modelType}__$(date -u '+%Y%m%dT%H%M%S')_train.log \
       python -m torch.distributed.launch --nproc_per_node=$nproc \
-        local/torch_xvector/train_old.py \
+        local/torch_xvector/train.py \
           --modelType $modelType \
           --numAttnHeads $numAttnHeads \
+          --batchSize 32 \
           exp/torch_xvector_1a/egs
 fi
 
