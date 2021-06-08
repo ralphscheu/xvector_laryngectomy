@@ -6,6 +6,7 @@ import torch
 from collections import OrderedDict
 import argparse
 from torch_xvector.models import *
+from pprint import pprint
 
 
 parser = argparse.ArgumentParser()
@@ -16,16 +17,11 @@ args = parser.parse_args()
 
 
 
-if args.modelType == 'xvector':
-    net = eval('xvecTDNN({}, p_dropout=0)'.format(args.numSpkrs))
-elif args.modelType == 'xvector-mha':
-    net = eval('xvecTDNN_MHA({}, num_attn_heads=1, p_dropout=0)'.format(args.numSpkrs))
-
 # Check for trained model
 try:
     checkpointFile = max(glob.glob(args.checkpointDir+'/*.tar'), key=os.path.getctime)
 except ValueError:
-    print("[ERROR] No trained model has been found in {}.".format(args.modelDirectory) )
+    print("[ERROR] No trained model has been found in {}.".format(args.checkpointDir) )
     sys.exit(1)
 
 checkpoint_state_dict = torch.load(checkpointFile)['model_state_dict']
@@ -35,9 +31,5 @@ for k, v in checkpoint_state_dict.items():
         new_state_dict[k[7:]] = v  # ugly fix to remove 'module' from key
     else:
         new_state_dict[k] = v
-net.load_state_dict(new_state_dict)
 
-with open(args.checkpointDir+'/model_definition', 'w') as f:
-    f.write(str(net))
-
-print(net)
+pprint(list(new_state_dict.keys()))
