@@ -17,7 +17,7 @@ import glob
 import argparse
 import pandas as pd
 import numpy as np
-from models import xvector, xvector_mha
+from models import xvector, xvector_mha, xvector_legacy
 import kaldi_python_io
 import socket
 from train_utils import *
@@ -62,6 +62,8 @@ if __name__ == "__main__":
     # Load model definition
     if args.modelType == 'xvector':
         net = xvector(args.numSpkrs, p_dropout=0)
+    elif args.modelType == 'xvector_legacy':
+        net = xvector_legacy(args.numSpkrs, p_dropout=0)
     elif args.modelType == 'xvector-mha':
         net = xvector_mha(args.numSpkrs, num_attn_heads=args.numAttnHeads, p_dropout=0)
 
