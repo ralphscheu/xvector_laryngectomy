@@ -135,7 +135,7 @@ def get_mean_scores(f_crits, f_scores):
     return mean_scores
 
 
-def main():
+if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('nnet_name', help='nnet name')
     parser.add_argument('output_dir', help='directory to save plot into')
@@ -149,15 +149,10 @@ def main():
         pathovoices_emb = pathovoices_emb.append({'utt': key.split('_', maxsplit=1)[1], 'speaker_group': key.split('_', maxsplit=1)[0], 'embedding': mat}, ignore_index=True)
 
 
-    # pathovoices_emb.embedding = list(TSNE(n_components=2).fit_transform(np.vstack(pathovoices_emb.embedding.values)))
-
-
     # plot colored speakergroups with and w/o partial resections
-    # plot_speakergroups(pathovoices_emb, None, "pathovoices_CTRL_LARY",                      args.output_dir, include_VOXCELEB=False, include_PARE=False)
-    # plot_speakergroups(pathovoices_emb, None, "pathovoices_CTRL_PARE_LARY",                 args.output_dir, include_VOXCELEB=False, include_PARE=True)
-
-
-
+    pathovoices_emb.embedding = list(TSNE(n_components=2).fit_transform(np.vstack(pathovoices_emb.embedding.values)))
+    plot_speakergroups(pathovoices_emb, None, "pathovoices_CTRL_LARY",                      args.output_dir, include_VOXCELEB=False, include_PARE=False)
+    plot_speakergroups(pathovoices_emb, None, "pathovoices_CTRL_PARE_LARY",                 args.output_dir, include_VOXCELEB=False, include_PARE=True)
 
 
     # include random embeddings from voxceleb1-test
@@ -174,33 +169,13 @@ def main():
     plot_speakergroups(pathovoices_voxceleb, f"pathovoices_ctrl_partres_laryng_voxceleb", args.output_dir,   include_VOXCELEB=True,  include_PARE=True)
 
 
-
-
-
-
-    # # include random embeddings from training set
-    # voxceleb_emb = pd.DataFrame(columns=["utt", "speaker_group", "embedding"])
-    # reader = ScriptReader("./xvectors/{}/train/xvec_for_plot.scp".format(args.nnet_name))
-    # count=0
-    # for key, mat in reader:
-    #     voxceleb_emb = voxceleb_emb.append({'utt': key, 'embedding': mat}, ignore_index=True)
-    #     count+=1
-    #     if count > 500:
-    #         break
-    # voxceleb_emb = voxceleb_emb.sample(20, random_state=0)
-    # plot_speakergroups(pathovoices_emb, voxceleb_emb, "pathovoices_CTRL_VOXCELEB_train_LARY",args.output_dir,      include_VOXCELEB=True,  include_PARE=False)
-    # plot_speakergroups(pathovoices_emb, voxceleb_emb, "pathovoices_CTRL_VOXCELEB_train_PARE_LARY",args.output_dir, include_VOXCELEB=True,  include_PARE=True)
-
-    # plot_scores_histograms(mean_scores_LARY, mean_scores_CTRL)
-    
-
     # get effort scores
     mean_scores_LARY = get_mean_scores("/mnt/speechdata/pathologic_voices/laryng41/labels/laryng41.raters5.crits", "/mnt/speechdata/pathologic_voices/laryng41/labels/laryng41.raters5.scores")[['utt', 'effort', 'intell', 'overall']]
     mean_scores_CTRL = get_mean_scores("/mnt/speechdata/pathologic_voices/altersstimme110_cut/labels/altersstimme110_cut.logos.crits", "/mnt/speechdata/pathologic_voices/altersstimme110_cut/labels/altersstimme110_cut.logos.scores")[['utt', 'effort', 'intell', 'overall']]
     mean_scores = pd.concat([mean_scores_LARY, mean_scores_CTRL])  # concat the dictionaries containing scores
-    # for crit in ['effort', 'intell', 'overall']:
-    #     plot_scores(pathovoices_emb.merge(mean_scores, on="utt"), crit, "pathologic_voices_CTRL_LARY - {}".format(crit), args.output_dir)
 
+    plot_scores_histograms(mean_scores_LARY, mean_scores_CTRL)
 
-if __name__ == "__main__":
-    main()
+    for crit in ['effort', 'intell', 'overall']:
+        plot_scores(pathovoices_emb.merge(mean_scores, on="utt"), crit, "pathologic_voices_CTRL_LARY - {}".format(crit), args.output_dir)
+
