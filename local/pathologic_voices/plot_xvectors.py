@@ -2,21 +2,22 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import numpy as np
 import argparse
-import sys
+import sys, os
 from kaldi_python_io import ScriptReader
 from sklearn.manifold import TSNE
 from datetime import datetime
 
 
 def save_plot(output_dir, filename):
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
     timestamp = datetime.now().strftime('%Y%m%dT%H%M%S')
-    save_filepath ='{}/{}__{}.png'.format(output_dir, filename, timestamp)
+    save_filepath = '{}/{}__{}.png'.format(output_dir, filename, timestamp)
     plt.savefig(save_filepath, bbox_inches='tight')
     print("Saved plot to {}".format( save_filepath ))
 
 
 def get_outliers(utterances, n=10):
-    print("---")
     embs = np.vstack(utterances.embedding.values)
     print("embs:", embs.shape)
     centroid = np.mean(embs, axis=0)
@@ -142,17 +143,23 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
 
-    # get extracted pathovoices_emb
+    # get extracted embeddings
     pathovoices_emb = pd.DataFrame(columns=["utt", "speaker_group", "embedding"])
     reader = ScriptReader("./xvectors/{}/pathologic_voices/xvector_normalized.scp".format(args.nnet_name))
     for key, mat in reader:
         pathovoices_emb = pathovoices_emb.append({'utt': key.split('_', maxsplit=1)[1], 'speaker_group': key.split('_', maxsplit=1)[0], 'embedding': mat}, ignore_index=True)
+    pathovoices_emb_original = pathovoices_emb.copy()
+
+    # get expert scores
+    mean_scores_LARY = get_mean_scores("/mnt/speechdata/pathologic_voices/laryng41/labels/laryng41.raters5.crits", "/mnt/speechdata/pathologic_voices/laryng41/labels/laryng41.raters5.scores")[['utt', 'effort', 'intell', 'overall']]
+    mean_scores_CTRL = get_mean_scores("/mnt/speechdata/pathologic_voices/altersstimme110_cut/labels/altersstimme110_cut.logos.crits", "/mnt/speechdata/pathologic_voices/altersstimme110_cut/labels/altersstimme110_cut.logos.scores")[['utt', 'effort', 'intell', 'overall']]
+    mean_scores = pd.concat([mean_scores_LARY, mean_scores_CTRL])  # concat the dictionaries containing scores
 
 
-    # plot colored speakergroups with and w/o partial resections
+    # plot colored speakergroups w/ and w/o partial resections
     pathovoices_emb.embedding = list(TSNE(n_components=2).fit_transform(np.vstack(pathovoices_emb.embedding.values)))
-    plot_speakergroups(pathovoices_emb, None, "pathovoices_CTRL_LARY",                      args.output_dir, include_VOXCELEB=False, include_PARE=False)
-    plot_speakergroups(pathovoices_emb, None, "pathovoices_CTRL_PARE_LARY",                 args.output_dir, include_VOXCELEB=False, include_PARE=True)
+    plot_speakergroups(pathovoices_emb, "pathovoices_ctrl_laryng",                      args.output_dir, include_VOXCELEB=False, include_PARE=False)
+    plot_speakergroups(pathovoices_emb, "pathovoices_ctrl_partres_laryng",                 args.output_dir, include_VOXCELEB=False, include_PARE=True)
 
 
     # include random embeddings from voxceleb1-test
@@ -161,21 +168,16 @@ if __name__ == "__main__":
     for key, mat in reader:
         voxceleb_emb = voxceleb_emb.append({'utt': key, 'speaker_group': 'VOXCELEB', 'embedding': mat}, ignore_index=True)
     voxceleb_emb = voxceleb_emb.sample(30, random_state=0)
-    pathovoices_voxceleb = pd.concat([pathovoices_emb, voxceleb_emb], axis=0)
+    pathovoices_voxceleb = pd.concat([pathovoices_emb_original, voxceleb_emb], axis=0)
 
     pathovoices_voxceleb.embedding = list( TSNE(n_components=2).fit_transform( np.vstack(pathovoices_voxceleb.embedding.values) ) )
         
-    plot_speakergroups(pathovoices_voxceleb, f"pathovoices_ctrl_laryng_voxceleb",         args.output_dir,   include_VOXCELEB=True,  include_PARE=False)
-    plot_speakergroups(pathovoices_voxceleb, f"pathovoices_ctrl_partres_laryng_voxceleb", args.output_dir,   include_VOXCELEB=True,  include_PARE=True)
+    plot_speakergroups(pathovoices_voxceleb, f"pathovoices_ctrl__laryng_voxceleb",         args.output_dir,   include_VOXCELEB=True,  include_PARE=False)
+    plot_speakergroups(pathovoices_voxceleb, f"pathovoices_ctrl__partres_laryng_voxceleb", args.output_dir,   include_VOXCELEB=True,  include_PARE=True)
 
-
-    # get effort scores
-    mean_scores_LARY = get_mean_scores("/mnt/speechdata/pathologic_voices/laryng41/labels/laryng41.raters5.crits", "/mnt/speechdata/pathologic_voices/laryng41/labels/laryng41.raters5.scores")[['utt', 'effort', 'intell', 'overall']]
-    mean_scores_CTRL = get_mean_scores("/mnt/speechdata/pathologic_voices/altersstimme110_cut/labels/altersstimme110_cut.logos.crits", "/mnt/speechdata/pathologic_voices/altersstimme110_cut/labels/altersstimme110_cut.logos.scores")[['utt', 'effort', 'intell', 'overall']]
-    mean_scores = pd.concat([mean_scores_LARY, mean_scores_CTRL])  # concat the dictionaries containing scores
-
-    plot_scores_histograms(mean_scores_LARY, mean_scores_CTRL)
-
+    # color embeddings based on scores
     for crit in ['effort', 'intell', 'overall']:
-        plot_scores(pathovoices_emb.merge(mean_scores, on="utt"), crit, "pathologic_voices_CTRL_LARY - {}".format(crit), args.output_dir)
+        plot_scores(pathovoices_emb.merge(mean_scores, on="utt"), crit, "pathovoices__ctrl_laryng - {}".format(crit), args.output_dir)
 
+    # visualize scores stats
+    # plot_scores_histograms(mean_scores_LARY, mean_scores_CTRL)

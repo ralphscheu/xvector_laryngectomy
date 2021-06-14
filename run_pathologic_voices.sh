@@ -4,6 +4,7 @@
 set -e
 
 nnet_name=xvector  # default to baseline model
+model_type=xvector_legacy
 cuda_device_id=0  # default to first GPU in system
 
 . ./utils/parse_options.sh
@@ -12,6 +13,8 @@ modelDir=`pwd`/models/$nnet_name
 trainXvecDir=`pwd`/xvectors/$nnet_name/train
 pathovoicesXvecDir=`pwd`/xvectors/$nnet_name/pathologic_voices
 
+dataset_name=pathologic_voices_CTRL_PARE_LARY
+data_dir=`pwd`/data/$dataset_name
 
 # create datasets
 $train_cmd logs/altersstimme110_cut/make_dataset.log \
@@ -34,8 +37,6 @@ $train_cmd logs/laryng41/make_dataset.log \
 utils/combine_data.sh data/pathologic_voices_CTRL_LARY      data/altersstimme110_cut data/laryng41
 utils/combine_data.sh data/pathologic_voices_CTRL_PARE_LARY data/altersstimme110_cut data/laryng41 data/teilres85
 
-dataset_name=pathologic_voices_CTRL_PARE_LARY
-data_dir=`pwd`/data/$dataset_name
 mfcc_dir=`pwd`/mfcc/$dataset_name
 vad_dir=`pwd`/mfcc/$dataset_name
 
@@ -57,18 +58,23 @@ $train_cmd logs/$dataset_name/prepare_feats_for_egs.log \
         $data_dir ${data_dir}_no_sil exp/${dataset_name}_no_sil
 utils/fix_data_dir.sh ${data_dir}_no_sil
 
-# Extract X-Vectors
-$train_cmd logs/$dataset_name/extract_xvectors.log \
+
+#########################################
+#########################################
+
+
+echo "Extract embeddings..."
+$train_cmd logs/$nnet_name/pathologic_voices/extract_xvectors.log \
     CUDA_VISIBLE_DEVICES=$cuda_device_id \
         python local/torch_xvector/extract.py $modelDir ${data_dir}_no_sil $pathovoicesXvecDir \
-            --modelType xvector_legacy
+            --modelType $model_type
 
-# Normalize X-Vectors
-$train_cmd logs/$dataset_name/normalize_xvectors.log \
+echo "Normalize embeddings..."
+$train_cmd logs/$nnet_name/pathologic_voices/normalize_xvectors.log \
     ivector-normalize-length \
         "ark:ivector-subtract-global-mean $trainXvecDir/mean.vec scp:$pathovoicesXvecDir/xvector.scp ark:- | transform-vec $trainXvecDir/transform.mat ark:- ark:- |" \
         ark,scp:$pathovoicesXvecDir/xvector_normalized.ark,$pathovoicesXvecDir/xvector_normalized.scp
 
-
-$train_cmd logs/pathologic_voices/plot_xvectors.log \
-    python local/pathologic_voices/plot_xvectors.py $nnet_name `pwd`/plots
+echo "Plot embeddings..."
+$train_cmd logs/$nnet_name/pathologic_voices/plot_xvectors.log \
+    python local/pathologic_voices/plot_xvectors.py $nnet_name `pwd`/xvectors/$nnet_name/_plots
