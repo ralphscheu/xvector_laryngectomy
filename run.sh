@@ -341,4 +341,19 @@ if [ $stage -eq 10 ]; then
   echo "minDCF(p-target=0.001): $mindcf2"
 fi
 
+
+# STAGE 11: PREDICT SCORES
+if [ $stage -eq 11 ]; then
+  echo "trainXvecDir: $trainXvecDir"
+  echo "testXvecDir:  $testXvecDir"
+  
+  $train_cmd logs/$nnet_name/linear_regression.log \
+    local/predict_scoring/linear_regression.py \
+      --nnet-name $nnet_name
+  
+  $train_cmd logs/$nnet_name/linear_regression.log \
+    local/predict_scoring/nonlinear_regression.py \
+      --nnet-name $nnet_name
+fi
+
 exit 0;
