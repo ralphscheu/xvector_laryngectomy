@@ -5,16 +5,7 @@ import argparse
 import sys, os
 from kaldi_python_io import ScriptReader
 from sklearn.manifold import TSNE
-from datetime import datetime
-
-
-def save_plot(output_dir, filename):
-    if not os.path.exists(output_dir):
-        os.makedirs(output_dir)
-    timestamp = datetime.now().strftime('%Y%m%dT%H%M%S')
-    save_filepath = '{}/{}__{}.png'.format(output_dir, filename, timestamp)
-    plt.savefig(save_filepath, bbox_inches='tight')
-    print("Saved plot to {}".format( save_filepath ))
+from viz_utils import get_mean_scores, save_plot
 
 
 def get_outliers(utterances, n=10):
@@ -39,8 +30,8 @@ def plot_speakergroups(pathovoices_emb, title, output_dir, annotate_outliers=Fal
     ax.set_title(title)
 
     x_LARY = pathovoices_emb.loc[pathovoices_emb.speaker_group == 'LARY']
-    embeddings_LARY = np.vstack(x_LARY.embedding.values)
-    ax.scatter(embeddings_LARY[:,0], embeddings_LARY[:,1], c='tab:red', label='laryng', s=pointsize)
+    embeddings_laryng = np.vstack(x_LARY.embedding.values)
+    ax.scatter(embeddings_laryng[:,0], embeddings_laryng[:,1], c='tab:red', label='laryng', s=pointsize)
     if annotate_outliers:
         for _, row in get_outliers(x_LARY).iterrows():
             ax.annotate(row.utt, row.embedding)
@@ -56,8 +47,8 @@ def plot_speakergroups(pathovoices_emb, title, output_dir, annotate_outliers=Fal
                 ax.annotate(row.utt, row.embedding)
 
     x_CTRL = pathovoices_emb.loc[pathovoices_emb.speaker_group == 'CTRL']
-    embeddings_CTRL = np.vstack(x_CTRL.embedding.values)
-    ax.scatter(embeddings_CTRL[:,0], embeddings_CTRL[:,1], c='tab:blue', label='ctrl', s=pointsize)
+    embeddings_laryng = np.vstack(x_CTRL.embedding.values)
+    ax.scatter(embeddings_laryng[:,0], embeddings_laryng[:,1], c='tab:blue', label='ctrl', s=pointsize)
     if annotate_outliers:
         for _, row in get_outliers(x_CTRL).iterrows():
             ax.annotate(row.utt, row.embedding)
@@ -82,64 +73,45 @@ def plot_scores(pathovoices_emb, score_col, title, output_dir, annotate=False):
     ax.set_title(title)
     pointsize = 160
     colormap = 'RdYlGn'
-    colormap_score_factor = -1
+    colormap_score_factor = -1  # causes lower values to appear green and higher values (bad scores) red
     
-    xvectors_LARY = pathovoices_emb.loc[pathovoices_emb.speaker_group == 'LARY']
-    embeddings_LARY = np.vstack(xvectors_LARY.embedding.values)
-    ax.scatter(embeddings_LARY[:,0], embeddings_LARY[:,1], c=xvectors_LARY[score_col] * colormap_score_factor, marker="^", label='LARY', s=pointsize, cmap=colormap)
-    if annotate:
-        for row in xvectors_LARY.iterrows():
-            row = row[1]  # remove index
-            ax.annotate(round(row[score_col], 2), row.embedding)
+    xvectors_laryng = pathovoices_emb.loc[pathovoices_emb.speaker_group == 'LARY']
+    if len(xvectors_laryng.index) > 0:
+        embeddings_laryng = np.vstack(xvectors_laryng.embedding.values)
+        ax.scatter(embeddings_laryng[:,0], embeddings_laryng[:,1], c=xvectors_laryng[score_col] * colormap_score_factor, marker="^", label='laryng', s=pointsize, cmap=colormap)
+        if annotate:
+            for row in xvectors_laryng.iterrows():
+                row = row[1]  # remove index
+                ax.annotate(round(row[score_col], 2), row.embedding)
+
+    xvectors_partres = pathovoices_emb.loc[pathovoices_emb.speaker_group == 'PARE']
+    if len(xvectors_partres.index) > 0:
+        embeddings_partres = np.vstack(xvectors_partres.embedding.values)
+        ax.scatter(embeddings_partres[:,0], embeddings_partres[:,1], c=xvectors_partres[score_col] * colormap_score_factor, marker="D", label='partres', s=pointsize, cmap=colormap)
+        if annotate:
+            for row in xvectors_partres.iterrows():
+                row = row[1]  # remove index
+                ax.annotate(round(row[score_col], 2), row.embedding)
     
-    xvectors_CTRL = pathovoices_emb.loc[pathovoices_emb.speaker_group == 'CTRL']
-    embeddings_CTRL = np.vstack(xvectors_CTRL.embedding.values)
-    ax.scatter(embeddings_CTRL[:,0], embeddings_CTRL[:,1], c=xvectors_CTRL[score_col] * colormap_score_factor, marker="o", label='CTRL', s=pointsize, cmap=colormap)
-    if annotate:
-        for row in xvectors_CTRL.iterrows():
-            row = row[1]  # remove index
-            ax.annotate(round(row[score_col], 2), row.embedding)
+    xvectors_ctrl = pathovoices_emb.loc[pathovoices_emb.speaker_group == 'CTRL']
+    if len(xvectors_ctrl.index) > 0:
+        embeddings_laryng = np.vstack(xvectors_ctrl.embedding.values)
+        ax.scatter(embeddings_laryng[:,0], embeddings_laryng[:,1], c=xvectors_ctrl[score_col] * colormap_score_factor, marker="o", label='ctrl', s=pointsize, cmap=colormap)
+        if annotate:
+            for row in xvectors_ctrl.iterrows():
+                row = row[1]  # remove index
+                ax.annotate(round(row[score_col], 2), row.embedding)
    
     plt.axis('off')
     ax.legend(fontsize=32)
     save_plot(output_dir, title)
 
 
-def plot_scores_histograms(scores_LARY, scores_CTRL):
-    fig, axes = plt.subplots(nrows=2, ncols=3)
-    plt.subplots_adjust(wspace=.6, hspace=.5)
-    axes[0, 0].set_title("LARY effort")
-    scores_LARY['effort'].plot.hist(alpha=0.5, ax=axes[0,0])
-    axes[0, 1].set_title("LARY intell")
-    scores_LARY['intell'].plot.hist(alpha=0.5, ax=axes[0,1])
-    axes[0, 2].set_title("LARY overall")
-    scores_LARY['overall'].plot.hist(alpha=0.5, ax=axes[0,2])
-    axes[1, 0].set_title("CTRL effort")
-    scores_CTRL['effort'].plot.hist(alpha=0.5, ax=axes[1,0])
-    axes[1, 1].set_title("CTRL intell")
-    scores_CTRL['intell'].plot.hist(alpha=0.5, ax=axes[1,1])
-    axes[1, 2].set_title("CTRL overall")
-    scores_CTRL['overall'].plot.hist(alpha=0.5, ax=axes[1,2])
-    save_plot("plots", "mean_scores_hist")
-
-
-def parse_ages(filename):
-    """ parse ages labels file into dictionary """
-    return pd.read_table(filename, names=['utt', 'age'])
-
-
-def get_mean_scores(f_crits, f_scores):
-    criteria = pd.read_table(f_crits, header=None, encoding="iso-8859-1")[0].values
-    mean_scores = pd.read_table(f_scores, ",", names=criteria)
-    mean_scores.rename(columns={'Untersucher': 'rater', 'PatientNr': 'utt', 'file': 'utt', 'Anstr': 'effort', 'Verst': 'intell', 'Gesamt': 'overall'}, inplace=True)
-    mean_scores = mean_scores.groupby(["utt"]).mean().reset_index()  # compute mean score across all raters
-    return mean_scores
-
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('nnet_name', help='nnet name')
-    parser.add_argument('output_dir', help='directory to save plot into')
+    parser.add_argument('--output_dir', default='./plots', help='directory to save plot into')
     args = parser.parse_args()
 
 
@@ -151,15 +123,22 @@ if __name__ == "__main__":
     pathovoices_emb_original = pathovoices_emb.copy()
 
     # get expert scores
-    mean_scores_LARY = get_mean_scores("/mnt/speechdata/pathologic_voices/laryng41/labels/laryng41.raters5.crits", "/mnt/speechdata/pathologic_voices/laryng41/labels/laryng41.raters5.scores")[['utt', 'effort', 'intell', 'overall']]
-    mean_scores_CTRL = get_mean_scores("/mnt/speechdata/pathologic_voices/altersstimme110_cut/labels/altersstimme110_cut.logos.crits", "/mnt/speechdata/pathologic_voices/altersstimme110_cut/labels/altersstimme110_cut.logos.scores")[['utt', 'effort', 'intell', 'overall']]
-    mean_scores = pd.concat([mean_scores_LARY, mean_scores_CTRL])  # concat the dictionaries containing scores
+    mean_scores_laryng = get_mean_scores(
+        "/mnt/speechdata/pathologic_voices/laryng41/labels/laryng41.raters5.crits", 
+        "/mnt/speechdata/pathologic_voices/laryng41/labels/laryng41.raters5.scores")[['utt', 'effort', 'intell', 'overall']]
+    mean_scores_partres = get_mean_scores(
+        "/mnt/speechdata/pathologic_voices/teilres85/labels/teilres85.experts1.crits", 
+        "/mnt/speechdata/pathologic_voices/teilres85/labels/teilres85.experts1.scores")[['utt', 'effort', 'intell', 'overall']]
+    mean_scores_ctrl = get_mean_scores(
+        "/mnt/speechdata/pathologic_voices/altersstimme110_cut/labels/altersstimme110_cut.logos.crits",
+        "/mnt/speechdata/pathologic_voices/altersstimme110_cut/labels/altersstimme110_cut.logos.scores")[['utt', 'effort', 'intell', 'overall']]
+    mean_scores = pd.concat([mean_scores_laryng, mean_scores_partres, mean_scores_ctrl])  # concat the dictionaries containing scores
 
 
     # plot colored speakergroups w/ and w/o partial resections
     pathovoices_emb.embedding = list(TSNE(n_components=2).fit_transform(np.vstack(pathovoices_emb.embedding.values)))
-    plot_speakergroups(pathovoices_emb, "pathovoices_ctrl_laryng",                      args.output_dir, include_VOXCELEB=False, include_PARE=False)
-    plot_speakergroups(pathovoices_emb, "pathovoices_ctrl_partres_laryng",                 args.output_dir, include_VOXCELEB=False, include_PARE=True)
+    plot_speakergroups(pathovoices_emb, "pathovoices__laryng_ctrl",         args.output_dir, include_VOXCELEB=False, include_PARE=False)
+    plot_speakergroups(pathovoices_emb, "pathovoices__laryng_partres_ctrl", args.output_dir, include_VOXCELEB=False, include_PARE=True)
 
 
     # include random embeddings from voxceleb1-test
@@ -169,15 +148,18 @@ if __name__ == "__main__":
         voxceleb_emb = voxceleb_emb.append({'utt': key, 'speaker_group': 'VOXCELEB', 'embedding': mat}, ignore_index=True)
     voxceleb_emb = voxceleb_emb.sample(30, random_state=0)
     pathovoices_voxceleb = pd.concat([pathovoices_emb_original, voxceleb_emb], axis=0)
-
     pathovoices_voxceleb.embedding = list( TSNE(n_components=2).fit_transform( np.vstack(pathovoices_voxceleb.embedding.values) ) )
-        
-    plot_speakergroups(pathovoices_voxceleb, f"pathovoices_ctrl__laryng_voxceleb",         args.output_dir,   include_VOXCELEB=True,  include_PARE=False)
-    plot_speakergroups(pathovoices_voxceleb, f"pathovoices_ctrl__partres_laryng_voxceleb", args.output_dir,   include_VOXCELEB=True,  include_PARE=True)
+    plot_speakergroups(pathovoices_voxceleb, f"pathovoices__laryng_partres_ctrl_voxceleb", args.output_dir, include_VOXCELEB=True, include_PARE=True)
+
 
     # color embeddings based on scores
     for crit in ['effort', 'intell', 'overall']:
-        plot_scores(pathovoices_emb.merge(mean_scores, on="utt"), crit, "pathovoices__ctrl_laryng - {}".format(crit), args.output_dir)
+        
+        # laryng + ctrl
+        plot_scores(pathovoices_emb.loc[pathovoices_emb.speaker_group != 'PARE'].merge(mean_scores, on="utt"), crit, "pathovoices__laryng_ctrl__{}".format(crit), args.output_dir)
 
-    # visualize scores stats
-    # plot_scores_histograms(mean_scores_LARY, mean_scores_CTRL)
+        # laryng + partres
+        plot_scores(pathovoices_emb.loc[pathovoices_emb.speaker_group != 'CTRL'].merge(mean_scores, on="utt"), crit, "pathovoices__laryng_partres__{}".format(crit), args.output_dir)
+
+        # laryng + partres + ctrl
+        plot_scores(pathovoices_emb.merge(mean_scores, on="utt"), crit, "pathovoices__laryng_partres_ctrl__{}".format(crit), args.output_dir)
