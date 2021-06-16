@@ -100,14 +100,6 @@ def train(args):
             for _,(X, Y) in train_loader:
                 Y = Y['matrix'][0][0][0].to(device)
                 X = X['matrix'].to(device)
-                # try:
-                #     assert max(Y) < args.numSpkrs and min(Y) >= 0
-                # except:
-                #     print('Read an out of range value at iter %d' %iter)
-                #     continue
-                # if torch.isnan(X).any():
-                #     print('Read a nan value at iter %d' %iter)
-                #     continue
 
                 accumulateStepSize = 4
                 preFetchBatchI = 0  # this counter within the prefetched batches only

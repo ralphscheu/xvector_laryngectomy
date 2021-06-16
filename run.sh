@@ -44,14 +44,9 @@ numAttnHeads=5
 . ./utils/parse_options.sh
 
 modelDir=models/$nnet_name
-
-# X-vector directories
 trainXvecDir=xvectors/$nnet_name/train
 testXvecDir=xvectors/$nnet_name/test
 
-echo "trainXvecDir: $trainXvecDir"
-echo "testXvecDir:  $testXvecDir"
-echo "modelDir:     $modelDir"
 
 if [ $stage -eq 0 ]; then
   local/make_voxceleb2.pl $voxceleb2_root dev data/voxceleb2_train
@@ -248,33 +243,35 @@ if [ $stage -eq 7 ]; then
       python -m torch.distributed.launch --nproc_per_node=$nproc \
         local/torch_xvector/train.py \
           --modelType $modelType \
-          --numAttnHeads $numAttnHeads \
           --batchSize 32 \
           exp/torch_xvector_1a/egs
 fi
 
 
 if [ $stage -eq 8 ]; then
-  echo "Stage $stage: Extract X-Vectors (+ visualize)"
+  echo "modelDir:     $modelDir"
+  echo "trainXvecDir: $trainXvecDir"
+  echo "testXvecDir:  $testXvecDir"
+  echo "Stage $stage: Extract embeddings"
 
   CUDA_VISIBLE_DEVICES=$cuda_device_id python local/torch_xvector/extract.py \
     --numSplits 400 \
     --modelType $modelType \
-    --numAttnHeads $numAttnHeads \
     $modelDir $trainFeatDir $trainXvecDir
   # concat separate scp files into one
   cat $trainXvecDir/split400/xvector_split400_*.scp > $trainXvecDir/xvector.scp
 
   CUDA_VISIBLE_DEVICES=$cuda_device_id python local/torch_xvector/extract.py \
     --modelType $modelType \
-    --numAttnHeads $numAttnHeads \
     $modelDir $testFeatDir $testXvecDir
 fi
 
 
-
 # STAGE 9: COMPUTE MEAN VECTORS, TRAIN PLDA MODEL, COMPUTE SCORES
 if [ $stage -eq 9 ]; then
+  echo "trainXvecDir: $trainXvecDir"
+  echo "testXvecDir:  $testXvecDir"
+
   # Reproducing voxceleb results
   echo "Compute the mean vector for centering the evaluation xvectors..."
   $train_cmd $trainXvecDir/log/compute_mean.log \
@@ -306,7 +303,10 @@ if [ $stage -eq 9 ]; then
 
 fi
 
+
 if [ $stage -eq 10 ]; then
+  echo "trainXvecDir: $trainXvecDir"
+  echo "testXvecDir:  $testXvecDir"
 
   scores_dir=$testXvecDir/scores_voxceleb1_test_cosine
   cat $voxceleb1_trials | awk '{print $1, $2}' | \
@@ -339,6 +339,21 @@ if [ $stage -eq 10 ]; then
   echo "EER: $eer%"
   echo "minDCF(p-target=0.01): $mindcf1"
   echo "minDCF(p-target=0.001): $mindcf2"
+fi
+
+
+# STAGE 11: PREDICT SCORES
+if [ $stage -eq 11 ]; then
+  echo "trainXvecDir: $trainXvecDir"
+  echo "testXvecDir:  $testXvecDir"
+  
+  $train_cmd logs/$nnet_name/linear_regression.log \
+    local/predict_scoring/linear_regression.py \
+      --nnet-name $nnet_name
+  
+  $train_cmd logs/$nnet_name/linear_regression.log \
+    local/predict_scoring/nonlinear_regression.py \
+      --nnet-name $nnet_name
 fi
 
 exit 0;
