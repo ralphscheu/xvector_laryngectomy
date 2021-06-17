@@ -2,11 +2,13 @@
 import pandas as pd
 import numpy as np
 from sklearn.linear_model import LinearRegression
-from sklearn.model_selection import LeaveOneOut, cross_validate
+from sklearn.model_selection import KFold, LeaveOneOut, cross_validate
 from sklearn.preprocessing import StandardScaler
 from scipy.stats import pearsonr
 import argparse
 from utils import get_extracted_xvectors, get_mean_scores
+from sklearn.metrics import mean_squared_error, r2_score, mean_absolute_error
+import torch.nn as nn
 
 
 if __name__ == "__main__":
@@ -21,39 +23,83 @@ if __name__ == "__main__":
     df = xvectors.merge(pd.concat([scores_LARY, scores_CTRL, scores_PARE]), on='utt')
     
 
-    print("\n== laryng: overall ==")
-    X, y = np.vstack(df.loc[df.speaker_group == "LARY"].embedding.values), df.loc[df.speaker_group == "LARY"].overall.values
-    X_scaled , y_scaled = StandardScaler().fit_transform(X) , StandardScaler().fit_transform(y.reshape(-1, 1))
+    sel_group_combinations = [['LARY'], ['PARE'], ['LARY', 'PARE'], ['CTRL']]
+    loo = LeaveOneOut()
 
-    cvscores = pd.DataFrame(cross_validate(LinearRegression(), X, y, cv=LeaveOneOut(), scoring=('neg_mean_squared_error', 'neg_mean_absolute_error'))).drop(columns=['fit_time', 'score_time'])
-    r, pvalue = pearsonr(X_scaled.mean(axis=1), y_scaled.mean(axis=1))
+    print("=================================================")
+    print("        Linear Regression (sklearn)")
+    print("=================================================")
+    for crit in ['overall', 'intell','effort']:
+        for sel_speaker_groups in sel_group_combinations:
 
-    print("Pearson Correlation -  r: {}, p-value: {}".format(r, pvalue))
-    print(cvscores.describe().loc[['mean', 'std']])
+            dataset = df.loc[df.speaker_group.isin(sel_speaker_groups)]
+            X = np.vstack(dataset.embedding)
+            y = dataset[crit].values.reshape((-1, 1))
 
-    ###
+            fold_results = {'mse': {}, 'mae': {}}
+            fold = 0
+            for train_ids, test_ids in loo.split(X):
+                xscaler, yscaler = StandardScaler(), StandardScaler()
+                X_train = xscaler.fit_transform( X[train_ids] )
+                y_train = yscaler.fit_transform( y[train_ids] )
 
-    print("\n== laryng: intell ==")
-    X, y = np.vstack(df.loc[df.speaker_group == "LARY"].embedding.values), df.loc[df.speaker_group == "LARY"].intell.values
-    X_scaled, y_scaled = StandardScaler().fit_transform(X), StandardScaler().fit_transform(y.reshape(-1, 1))
+                X_test = xscaler.transform( X[test_ids] )
+                y_test = yscaler.transform( y[test_ids] )
 
-    cvscores = pd.DataFrame(cross_validate(LinearRegression(), X, y, cv=LeaveOneOut(), scoring=('neg_mean_squared_error', 'neg_mean_absolute_error'))).drop(columns=['fit_time', 'score_time'])
-    r, pvalue = pearsonr(X_scaled.mean(axis=1), y_scaled.mean(axis=1))
+                regr = LinearRegression()
+                regr.fit(X_test, y_test)
 
-    print("Pearson Correlation -  r: {}, p-value: {}".format(r, pvalue))
-    print(cvscores.describe().loc[['mean', 'std']])
+                y_pred = regr.predict(X_test)
 
-    ###
+                mse = mean_squared_error(y_test, y_pred)
+                mae = mean_absolute_error(y_test, y_pred)
+                fold_results['mse'][fold] = mse
+                fold_results['mae'][fold] = mae
 
-    print("\n== laryng: effort ==")
-    X, y = np.vstack(df.loc[df.speaker_group == "LARY"].embedding.values), df.loc[df.speaker_group == "LARY"].effort.values
-    X_scaled, y_scaled = StandardScaler().fit_transform(X), StandardScaler().fit_transform(y.reshape(-1, 1))
+                fold += 1
+        
+            # evaluate crossvalidation results
+            r, pvalue = pearsonr(
+                StandardScaler().fit_transform( X ).mean(axis=1),
+                StandardScaler().fit_transform( y ).mean(axis=1),
+                )
+            print("Pearson Correlation -  r: {}, p-value: {}".format(r, pvalue))
 
-    cvscores = pd.DataFrame(cross_validate(LinearRegression(), X, y, cv=LeaveOneOut(), scoring=('neg_mean_squared_error', 'neg_mean_absolute_error'))).drop(columns=['fit_time', 'score_time'])
-    r, pvalue = pearsonr(X_scaled.mean(axis=1), y_scaled.mean(axis=1))
+            print(f'{sel_speaker_groups} {crit}: LeaveOneOut cross validation')
+            sum = 0.0
+            for key, value in fold_results['mse'].items():
+                sum += value
+            print(f'Average MSE:', sum/len(fold_results['mse'].items()))
 
-    print("Pearson Correlation -  r: {}, p-value: {}".format(r, pvalue))
-    print(cvscores.describe().loc[['mean', 'std']])
+            sum = 0.0
+            for key, value in fold_results['mae'].items():
+                sum += value
+            print(f'Average MAE:', sum/len(fold_results['mae'].items()))
+            print()
+
+    # ###
+
+    # print("\n== laryng: intell ==")
+    # X, y = np.vstack(df.loc[df.speaker_group == "LARY"].embedding.values), df.loc[df.speaker_group == "LARY"].intell.values
+    # X_scaled, y_scaled = StandardScaler().fit_transform(X), StandardScaler().fit_transform(y.reshape(-1, 1))
+
+    # cvscores = pd.DataFrame(cross_validate(LinearRegression(), X, y, cv=LeaveOneOut(), scoring=('neg_mean_squared_error', 'neg_mean_absolute_error'))).drop(columns=['fit_time', 'score_time'])
+    # r, pvalue = pearsonr(X_scaled.mean(axis=1), y_scaled.mean(axis=1))
+
+    # print("Pearson Correlation -  r: {}, p-value: {}".format(r, pvalue))
+    # print(cvscores.describe().loc[['mean', 'std']])
+
+    # ###
+
+    # print("\n== laryng: effort ==")
+    # X, y = np.vstack(df.loc[df.speaker_group == "LARY"].embedding.values), df.loc[df.speaker_group == "LARY"].effort.values
+    # X_scaled, y_scaled = StandardScaler().fit_transform(X), StandardScaler().fit_transform(y.reshape(-1, 1))
+
+    # cvscores = pd.DataFrame(cross_validate(LinearRegression(), X, y, cv=LeaveOneOut(), scoring=('neg_mean_squared_error', 'neg_mean_absolute_error'))).drop(columns=['fit_time', 'score_time'])
+    # r, pvalue = pearsonr(X_scaled.mean(axis=1), y_scaled.mean(axis=1))
+
+    # print("Pearson Correlation -  r: {}, p-value: {}".format(r, pvalue))
+    # print(cvscores.describe().loc[['mean', 'std']])
 
     # print("\n===========================")
     
