@@ -10,6 +10,7 @@ import pandas as pd
 from torch.utils.data import DataLoader, TensorDataset
 from torch import Tensor
 from sklearn.preprocessing import StandardScaler
+from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
 
 
 class LinearModel(torch.nn.Module):
@@ -66,8 +67,8 @@ if __name__ == "__main__":
             X = np.vstack(dataset.embedding)
             y = dataset[crit].values.reshape((-1, 1))
             
-            fold_results = {'mse': {}, 'mae': {}}
-            for fold, (train_ids, test_ids) in enumerate(kfold.split(dataset)):
+            fold_results = {'mse': {}, 'mae': {}, 'r2': {}}
+            for fold, (train_ids, test_ids) in enumerate( kfold.split(X) ):
                 xscaler, yscaler = StandardScaler(), StandardScaler()
                 X_train = Tensor( xscaler.fit_transform( X[train_ids] ) )
                 y_train = Tensor( yscaler.fit_transform( y[train_ids] ) ).view(-1, 1)
@@ -93,12 +94,14 @@ if __name__ == "__main__":
                     loss = criterion(y_pred, y_test)
                     mae_fn = nn.L1Loss()
                     mae = mae_fn(y_pred, y_test)
+                    r2 = r2_score(y_test, y_pred)
 
                 fold_results['mse'][fold] = loss.item()
                 fold_results['mae'][fold] = mae.item()
+                fold_results['r2'][fold] = r2
 
 
-            print(f'{sel_speaker_groups} {crit}: {k_folds}-Fold cross validation')
+            print('{} {}: {}-fold cross validation'.format(sel_speaker_groups, crit, k_folds))
             sum = 0.0
             for key, value in fold_results['mse'].items():
                 sum += value
@@ -108,6 +111,12 @@ if __name__ == "__main__":
             for key, value in fold_results['mae'].items():
                 sum += value
             print(f'Average MAE:', sum/len(fold_results['mae'].items()))
+            print()
+
+            sum = 0.0
+            for key, value in fold_results['r2'].items():
+                sum += value
+            print(f'Avg R-squared:', sum/len(fold_results['r2'].items()))
             print()
 
 
@@ -126,7 +135,7 @@ if __name__ == "__main__":
             X = np.vstack(dataset.embedding)
             y = dataset[crit].values.reshape((-1, 1))
 
-            fold_results = {'mse': {}, 'mae': {}}
+            fold_results = {'mse': {}, 'mae': {}, 'r2': {}}
             for fold, (train_ids, test_ids) in enumerate(kfold.split(dataset)):
                 xscaler, yscaler = StandardScaler(), StandardScaler()
                 X_train = Tensor( xscaler.fit_transform( X[train_ids] ) )
@@ -153,9 +162,11 @@ if __name__ == "__main__":
                     loss = criterion(y_pred, y_test)
                     mae_fn = nn.L1Loss()
                     mae = mae_fn(y_pred, y_test)
+                    r2 = r2_score(y_test, y_pred)
 
                 fold_results['mse'][fold] = loss.item()
                 fold_results['mae'][fold] = mae.item()
+                fold_results['r2'][fold] = r2
 
 
             print(f'{sel_speaker_groups} {crit}: {k_folds}-Fold cross validation')
@@ -168,4 +179,9 @@ if __name__ == "__main__":
             for key, value in fold_results['mae'].items():
                 sum += value
             print(f'Average MAE:', sum/len(fold_results['mae'].items()))
+
+            sum = 0.0
+            for key, value in fold_results['r2'].items():
+                sum += value
+            print(f'Avg R-squared:', sum/len(fold_results['r2'].items()))
             print()
