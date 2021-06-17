@@ -34,7 +34,6 @@ nnet_dir=exp/torch_xvector_1a
 nnet_name=xvector
 
 # which CUDA device to use (defaults to single gpu)
-nproc=1
 cuda_device_id=0
 
 stage=0
@@ -235,11 +234,15 @@ if [ $stage -eq 6 ]; then
 fi
 
 
+# compute nproc from cuda-device-id
+nproc=`echo "$cuda_device_id" | grep -o "," | wc -l`
+nproc=$(($nproc+1))
+
 if [ $stage -eq 7 ]; then
   echo "Stage $stage: Train the model"
 
   CUDA_VISIBLE_DEVICES=$cuda_device_id \
-    $train_cmd logs/${modelType}__$(date -u '+%Y%m%dT%H%M%S')_train.log \
+    $train_cmd logs/${modelType}__$(date -u '+%Y%m%dT%H%M%S')/train.log \
       python -m torch.distributed.launch --nproc_per_node=$nproc \
         local/torch_xvector/train.py \
           --modelType $modelType \

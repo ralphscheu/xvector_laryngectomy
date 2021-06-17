@@ -12,7 +12,6 @@ import glob
 import h5py
 import torch
 import random
-import configparser
 import argparse
 from datetime import datetime
 import numpy as np
@@ -24,19 +23,6 @@ from collections import OrderedDict
 from models import xvector
 import torch.nn as nn
 
-
-def readHdf5File_full(fileName):
-    """ Read at-once from the hdf5 file. Rarely used
-        Outputs:
-        feats: (N,1,chunkLen,30)
-        labels: (N,1)
-    """
-    with h5py.File(fileName,'r') as x:
-        feats, labels = np.array(x.get('feats')), np.array(x.get('labels'))
-    chunkLen = feats.shape[1]
-    feats = torch.from_numpy(feats).unsqueeze(1) # make in (N,1,chunkLen,30)
-    labels = torch.from_numpy(labels)
-    return feats, labels
 
 class nnet3EgsDL(IterableDataset):
     """ Data loader class to read directly from egs files, no HDF5
@@ -67,158 +53,12 @@ class nnet3EgsDLNonIterable(Dataset):
         return self.items[idx]
 
 
-class myH5DL(Dataset):
-    """ Data loader class customized to reading from hdf5 files
-    """
-
-    def __init__(self, hdf5File):
-        x = h5py.File(hdf5File,'r')
-        self.feats = x.get('feats')
-        self.labels = x.get('labels')
-
-    def __len__(self):
-        return len(self.labels)
-
-    def __getitem__(self, idx):
-        """ Return samples from idx:idx+batch_size
-        """
-        X = self.feats[idx,:,:]
-        Y = self.labels[idx]
-        return X, Y
-
-class myH5DL_sampler(Dataset):
-    """ Data loader class customized to reading from hdf5 files
-        Based on https://github.com/cyvius96/prototypical-network-pytorch/blob/master/samplers.py
-    """
-
-    def __init__(self, hdf5File, minClasses, maxClasses, samplesPerClass, numEpisodes=100):
-        self.samplesPerClass = samplesPerClass
-        self.minClasses = minClasses
-        self.maxClasses = maxClasses
-        self.numEpisodes = numEpisodes
-        x = h5py.File(hdf5File,'r')
-        self.feats = x.get('feats')
-        self.labels = x.get('labels')
-        npLabels = self.labels[()].reshape(-1)
-        self.uniqLabels = np.ndarray.tolist(np.unique(npLabels))
-        try:
-            assert self.maxClasses <= len(self.uniqLabels)
-        except:
-            print('Requesting more classes (%d) than available (%d)' %(self.maxClasses, len(self.uniqLabels)))
-            sys.exit(1)
-
-        self.labelIndices = {}
-        for lab in self.uniqLabels:
-            ind = np.argwhere(npLabels==lab).reshape(-1)
-            # self.labelIndices[lab] = torch.from_numpy(ind)
-            self.labelIndices[lab] = np.ndarray.tolist(ind)
-        self.minSamplesPerClass = min([len(v) for v in self.labelIndices.values()])
-        try:
-            assert self.samplesPerClass <= self.minSamplesPerClass
-        except:
-            print('Requesting more samples (%d) than available (%d)' %(self.samplesPerClass, self.minSamplesPerClass))
-            sys.exit(1)
-        self.nClasses = random.randint(self.minClasses, self.maxClasses+1)
-
-
-    def __iter__(self):
-        for _ in range(self.numEpisodes):
-            classes = random.sample(self.uniqLabels, self.nClasses)
-            batchInd = np.empty((self.samplesPerClass, self.nClasses))
-            for i,c in enumerate(classes):
-                selectSampleInd = np.random.choice(self.labelIndices[c], self.samplesPerClass)
-                batchInd[:,i] = selectSampleInd
-            yield batchInd.ravel()
-
-
 def prepareModel(args):
-
     device = torch.device("cuda:" + str(args.local_rank) if torch.cuda.is_available() else "cpu")
     torch.distributed.init_process_group(backend='nccl', init_method='env://', world_size=args.world_size, rank=args.local_rank)
     torch.backends.cudnn.benchmark = True
 
-    if args.trainingMode == 'resume':
-        # select the latest model from modelDir
-        modelFile = max(glob.glob(args.resumeModelDir+'/*'), key=os.path.getctime)
-        net = eval('{}({}, p_dropout=0)'.format(args.modelType, args.numSpkrs))
-        optimizer = torch.optim.Adam(filter(lambda p: p.requires_grad, net.parameters()), lr=args.baseLR)
-        net.to(device)
-
-        if torch.cuda.device_count() > 1:
-            print("Using ", torch.cuda.device_count(), "GPUs!")
-            net = nn.DataParallel(net)
-
-        checkpoint = torch.load(modelFile,map_location=torch.device('cuda'))
-        new_state_dict = OrderedDict()
-        for k, v in checkpoint['model_state_dict'].items():
-            if k.startswith('module.'):
-                new_state_dict[k[7:]] = v  # ugly fix to remove 'module' from key
-            else:
-                new_state_dict[k] = v
-        # load params
-        net.load_state_dict(new_state_dict)
-
-        step = checkpoint['step']
-        totalSteps = args.numEpochs * args.numArchives
-        print('Resuming training from step %d' %step)
-
-        # set the dropout
-        if 1.0*step < args.stepFrac*totalSteps:
-            p_drop = args.pDropMax*step*args.stepFrac/totalSteps
-        else:
-            p_drop = max(0,args.pDropMax*(totalSteps + args.stepFrac - 2*step)/(totalSteps - totalSteps*args.stepFrac))
-        for x in net.modules():
-            if isinstance(x, torch.nn.Dropout):
-                x.p = p_drop
-        saveDir = args.resumeModelDir
-
-    elif args.trainingMode == 'sanity_check':
-
-        # select the latest model from modelDir
-        modelFile = max(glob.glob(args.resumeModelDir+'/*'), key=os.path.getctime)
-        net = eval('{}({}, p_dropout=0)'.format(args.modelType, args.numSpkrs))
-        optimizer = torch.optim.Adam(filter(lambda p: p.requires_grad, net.parameters()), lr=args.baseLR)
-        net.to(device)
-
-        if torch.cuda.device_count() > 1:
-            print("Using ", torch.cuda.device_count(), "GPUs!")
-            net = nn.DataParallel(net)
-
-        checkpoint = torch.load(modelFile,map_location=torch.device('cuda'))
-        new_state_dict = OrderedDict()
-        for k, v in checkpoint['model_state_dict'].items():
-            if k.startswith('module.'):
-                new_state_dict[k[7:]] = v  # ugly fix to remove 'module' from key
-            else:
-                new_state_dict[k] = v
-
-        net.tdnn1.weight = torch.nn.Parameter(new_state_dict['tdnn1.weight'])
-        net.tdnn1.bias = torch.nn.Parameter(new_state_dict['tdnn1.bias'])
-        net.tdnn2.weight = torch.nn.Parameter(new_state_dict['tdnn2.weight'])
-        net.tdnn2.bias = torch.nn.Parameter(new_state_dict['tdnn2.bias'])
-        net.tdnn3.weight = torch.nn.Parameter(new_state_dict['tdnn3.weight'])
-        net.tdnn3.bias = torch.nn.Parameter(new_state_dict['tdnn3.bias'])
-        net.tdnn4.weight = torch.nn.Parameter(new_state_dict['tdnn4.weight'])
-        net.tdnn4.bias = torch.nn.Parameter(new_state_dict['tdnn4.bias'])
-        net.tdnn5.weight = torch.nn.Parameter(new_state_dict['tdnn5.weight'])
-        net.tdnn5.bias = torch.nn.Parameter(new_state_dict['tdnn5.bias'])
-
-        step = checkpoint['step']
-        totalSteps = args.numEpochs * args.numArchives
-        print('Resuming training from step %d' %step)
-
-        # set the dropout
-        if 1.0*step < args.stepFrac*totalSteps:
-            p_drop = args.pDropMax*step*args.stepFrac/totalSteps
-        else:
-            p_drop = max(0,args.pDropMax*(totalSteps + args.stepFrac - 2*step)/(totalSteps - totalSteps*args.stepFrac))
-        for x in net.modules():
-            if isinstance(x, torch.nn.Dropout):
-                x.p = p_drop
-        saveDir = args.resumeModelDir
-        step += 1
-
-    elif args.trainingMode == 'init':
+    if args.trainingMode == 'init':
         if args.is_master:
             print(f'Initializing models...')
         step = 0
@@ -239,7 +79,6 @@ def prepareModel(args):
     return net, optimizer, step, saveDir
 
 
-
 def getParams():
     parser = argparse.ArgumentParser()
 
@@ -250,8 +89,7 @@ def getParams():
     # General Parameters
     parser.add_argument('--modelType', default='xvector', help='Model class. Check models.py')
     parser.add_argument('--featDim', default=30, type=int, help='Frame-level feature dimension')
-    parser.add_argument('--trainingMode', default='init',
-        help='(init) Train from scratch, (resume) Resume training, (finetune) Finetune a pretrained model')
+    parser.add_argument('--trainingMode', default='init', help='(init) Train from scratch')
     parser.add_argument('--resumeModelDir', default=None, help='Path containing training checkpoints')
     parser.add_argument('featDir', default=None, help='Directory with training archives')
 
@@ -261,9 +99,7 @@ def getParams():
     trainingArgs.add_argument('--numSpkrs', default=7323, type=int, help='Number of output labels')
     trainingArgs.add_argument('--logStepSize', default=200, type=int, help='Iterations per log')
     trainingArgs.add_argument('--batchSize', default=32, type=int, help='Batch size')
-    trainingArgs.add_argument('--numEgsPerArk', default=366150, type=int,
-        help='Number of training examples per egs file')
-    trainingArgs.add_argument('--numAttnHeads', default=12, type=int)
+    trainingArgs.add_argument('--numEgsPerArk', default=366150, type=int, help='Number of training examples per egs file')
 
     # Optimization Params
     optArgs = parser.add_argument_group('Optimization Parameters')
@@ -277,16 +113,8 @@ def getParams():
     optArgs.add_argument('--stepFrac', default=0.5, type=float,
         help='Training iteration when dropout = pDropMax')
 
-    # Metalearning params
-    protoArgs = parser.add_argument_group('Protonet Parameters')
-    protoArgs.add_argument('--preTrainedModelDir', default=None, help='Embedding model to initialize training')
-    protoArgs.add_argument('--protoMinClasses', default=5, type=int, help='Minimum N-way')
-    protoArgs.add_argument('--protoMaxClasses', default=35, type=int, help='Maximum N-way')
-    protoArgs.add_argument('--protoEpisodesPerArk', default=25, type=int, help='Episodes per ark file')
-    protoArgs.add_argument('--totalEpisodes', default=100, type=int, help='Number of training episodes')
-    protoArgs.add_argument('--supportFrac', default=0.7, type=float, help='Fraction of samples as supports')
-
     return parser
+
 
 def checkParams(args):
     if args.featDir is None:
