@@ -10,7 +10,7 @@ import numpy as np
 from torch.utils.data import DataLoader
 from torch.utils.data.distributed import DistributedSampler
 import math
-from models import xvector, xvector_mha
+from models import xvector
 from torch.distributed import init_process_group
 from datetime import datetime
 
@@ -27,23 +27,30 @@ def train(args):
 
     if args.is_master:
         print("Initializing model...")
+
     if args.modelType == 'xvector':
         net = xvector(numSpkrs=args.numSpkrs, rank=args.local_rank).to(device)
-    elif args.modelType == 'xvector-mha':
-        net = xvector_mha(numSpkrs=args.numSpkrs, num_attn_heads=args.numAttnHeads, rank=args.local_rank).to(device)
-    
-    if args.is_master:
-        print(net)
-        print()
+        criterion = nn.CrossEntropyLoss()
+        optimizer = torch.optim.Adam(net.parameters(), lr=args.baseLR)
 
-    criterion = nn.NLLLoss()
-    optimizer = torch.optim.Adam(net.parameters(), lr=args.baseLR)
+    elif args.modelType == 'xvector-ams':
+        net = xvector(numSpkrs=args.numSpkrs, rank=args.local_rank).to(device)
+        criterion = train_utils.AMSoftmax(in_feats=args.numSpkrs, n_classes=args.numSpkrs, rank=args.local_rank).to(args.local_rank)
+        optimizer = torch.optim.Adam(net.parameters(), lr=args.baseLR)
+
+    if args.is_master:
+        print("===============================")
+        print(net)
+        print("loss:", criterion)
+        print("optimizer:", optimizer)
+        print("===============================")
+
 
     net.to(device)
     net = nn.parallel.DistributedDataParallel(net, device_ids=[args.local_rank])
 
     if torch.cuda.device_count() > 1 and args.is_master:
-            print("Using ", torch.cuda.device_count(), "GPUs!")
+        print("Using ", torch.cuda.device_count(), "GPUs!")
 
     # create model dir
     if args.is_master:
@@ -53,10 +60,8 @@ def train(args):
 
     with torch.cuda.device(device):
 
-        numBatchesPerArk = int(args.numEgsPerArk/args.batchSize)
+        numBatchesPerArk = int(args.numEgsPerArk / args.batchSize)
 
-        # TRAINING LOOP
-        step = 0
         totalSteps = args.numEpochs * args.numArchives
 
         cyclic_lr_scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer,
@@ -67,6 +72,8 @@ def train(args):
                                 total_steps=totalSteps*numBatchesPerArk,
                                 pct_start=0.15)
 
+        # TRAINING LOOP
+        step = 0
         while step < totalSteps:
             
             archiveI = step % args.numArchives + 1
@@ -112,8 +119,8 @@ def train(args):
                         preFetchBatchI += 1
                         
                         # fwd + bckwd + optim
-                        output = net(X[preFetchBatchI*args.batchSize:(preFetchBatchI+1)*args.batchSize,:,:].permute(0,2,1), args.noiseEps)
-                        loss = criterion(output, Y[preFetchBatchI*args.batchSize:(preFetchBatchI+1)*args.batchSize].squeeze())
+                        output = net(X[preFetchBatchI * args.batchSize:(preFetchBatchI + 1) * args.batchSize,:,:].permute(0,2,1), args.noiseEps)
+                        loss = criterion(output, Y[preFetchBatchI * args.batchSize:(preFetchBatchI + 1) * args.batchSize].squeeze())
                         if np.isnan(loss.item()):
                             print('Nan encountered at iter %d. Exiting..' %iter)
                             sys.exit(1)

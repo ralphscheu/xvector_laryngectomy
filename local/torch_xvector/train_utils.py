@@ -21,7 +21,8 @@ import kaldi_python_io
 from kaldiio import ReadHelper
 from torch.utils.data import Dataset, IterableDataset
 from collections import OrderedDict
-from models import xvector, xvector_mha
+from models import xvector
+import torch.nn as nn
 
 
 def readHdf5File_full(fileName):
@@ -308,6 +309,7 @@ def checkParams(args):
         print('Provide model directory to resume training from')
         sys.exit(1)
 
+
 def computeValidAccuracy(args, modelDir):
     """ Computes frame-level validation accuracy """
     modelFile = max(glob.glob(modelDir+'/*'), key=os.path.getctime)
@@ -315,8 +317,8 @@ def computeValidAccuracy(args, modelDir):
 
     if args.modelType == 'xvector':
         net = xvector(numSpkrs=args.numSpkrs, rank=args.local_rank).to(args.local_rank)
-    elif args.modelType == 'xvector-mha':
-        net = xvector_mha(numSpkrs=args.numSpkrs, num_attn_heads=args.numAttnHeads, rank=args.local_rank).to(args.local_rank)
+    elif args.modelType == 'xvector-ams':
+        net = xvector(numSpkrs=args.numSpkrs, rank=args.local_rank).to(args.local_rank)
     
     checkpoint = torch.load(modelFile,map_location=torch.device('cuda'))
     new_state_dict = OrderedDict()
@@ -365,4 +367,32 @@ def par_core_extractXvectors(inFeatsScp, outXvecArk, outXvecScp, net, layerName)
                 except:
                     print(key, mat.shape[0], "excluded: too big for GPU memory")
                     continue
+
+
+class AMSoftmax(nn.Module):
+    """ https://github.com/CoinCheung/pytorch-loss/blob/e8e997c85fe69d6de4028d96702b9b3253e68546/pytorch_loss/amsoftmax.py """
+
+    def __init__(self, in_feats, n_classes, rank, m=0.3, s=15):
+        super().__init__()
+        self.rank = rank
+        self.m = m
+        self.s = s
+        self.in_feats = in_feats
+        self.W = torch.nn.Parameter(torch.randn(in_feats, n_classes), requires_grad=True)
+        self.ce = nn.CrossEntropyLoss()
+        nn.init.xavier_normal_(self.W, gain=1)
+
+    def forward(self, x, lb):
+        assert x.size()[0] == lb.size()[0]
+        assert x.size()[1] == self.in_feats
+        x_norm = torch.norm(x, p=2, dim=1, keepdim=True).clamp(min=1e-9)
+        x_norm = torch.div(x, x_norm)
+        w_norm = torch.norm(self.W, p=2, dim=0, keepdim=True).clamp(min=1e-9)
+        w_norm = torch.div(self.W, w_norm)
+        costh = torch.mm(x_norm, w_norm)
+        delt_costh = torch.zeros_like(costh).scatter_(1, lb.unsqueeze(1), self.m)
+        costh_m = costh - delt_costh
+        costh_m_s = self.s * costh_m
+        loss = self.ce(costh_m_s, lb)
+        return loss
 
