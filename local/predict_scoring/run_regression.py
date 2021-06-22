@@ -16,7 +16,7 @@ from datetime import datetime
 import torch
 from torch.nn import functional as F
 
-RESULTS_DF_COLUMNS = ['model', 'num_epochs', 'lr', 'crit', 'speaker_group', 'avg_mse', 'avg_mae', 'pearson_r', 'p_value', 'r2']
+RESULTS_COLUMNS = ['model', 'num_epochs', 'lr', 'crit', 'speaker_group', 'avg_mse', 'avg_mae', 'pearson_r', 'p_value', 'r2']
 SEL_GROUP_COMBINATIONS = [['LARY'], ['PARE'], ['LARY', 'PARE'], ['CTRL']]
 
 
@@ -50,7 +50,7 @@ def run_pytorch_model(title, df, model, criterion=torch.nn.L1Loss(), lr=1e-5, nu
     print(f"running {title}...")
 
     # this will hold crossvalidated evaluation results
-    results = pd.DataFrame(columns=['model', 'num_epochs', 'lr', 'crit', 'speaker_group', 'avg_mse', 'avg_mae', 'pearson_r', 'p_value', 'r2'])
+    results = pd.DataFrame(columns=RESULTS_COLUMNS)
 
     kfold = KFold(n_splits=k_folds, shuffle=True)
 
@@ -143,7 +143,7 @@ def run_sklearn_model(title, model, df, print_results=False):
     print(f"running {title}...")
 
     # this will hold crossvalidated evaluation results
-    results = pd.DataFrame(columns=RESULTS_DF_COLUMNS)
+    results = pd.DataFrame(columns=RESULTS_COLUMNS)
 
     for crit in ['overall', 'intell','effort']:
         for sel_speaker_groups in SEL_GROUP_COMBINATIONS:
@@ -229,7 +229,7 @@ if __name__ == "__main__":
     scores_CTRL = get_mean_scores("/mnt/speechdata/pathologic_voices/altersstimme110_cut/labels/altersstimme110_cut.logos.crits", "/mnt/speechdata/pathologic_voices/altersstimme110_cut/labels/altersstimme110_cut.logos.scores")[['utt', 'effort', 'intell', 'overall']]
     df = xvectors.merge(pd.concat([scores_LARY, scores_CTRL, scores_PARE]), on='utt')
 
-    all_results = pd.DataFrame(columns=RESULTS_DF_COLUMNS)
+    all_results = pd.DataFrame(columns=RESULTS_COLUMNS)
     
 
     ### sklearn models
@@ -250,8 +250,8 @@ if __name__ == "__main__":
 
     ### PyTorch models
 
-    for _num_epochs in [100, 200, 300, 500]:
-        for lr in [1e-4, 1e-5, 1e-6, 1e-7]:
+    for _num_epochs in [200, 500, 1000]:
+        for lr in [1e-3, 1e-4]:
 
             all_results = all_results.append( run_pytorch_model(
                 "LinearModel", df, 
