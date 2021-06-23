@@ -64,7 +64,7 @@ def run_pytorch_model(title, df, model, criterion=torch.nn.L1Loss(), lr=1e-5, nu
             y_preds = []
             y_tests = []
             fold_results = {'mse': {}, 'mae': {}}
-            for fold, (train_ids, test_ids) in enumerate( kfold.split(X) ):
+            for fold, (train_ids, test_ids) in enumerate( LeaveOneOut().split(X) ):
                 # generate train and test portion, scale X_train, X_test according to X_train mean+std
                 xscaler = StandardScaler()
                 X_train = torch.Tensor( xscaler.fit_transform( X[train_ids] ) )
