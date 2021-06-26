@@ -71,15 +71,12 @@ class xvector(nn.Module):
         return x
 
 
-##################
-#     MODELS     #
-##################
-
 class xvector_legacy(nn.Module):
     """
-    DO NOT USE - LEGACY MODEL WITHOUT REFACTORED NN.SEQUENTIAL LAYERS
-        (only for extracting xvectors from a saved model with the below structure)
+    DO NOT USE FOR TRAINING
+    Legacy model without tdnn and fc layers factored out, effectively the architecture is the same.
     Baseline x-vector model using statistics pooling (mean+std)
+    -> need for loading xvector__20210409T145152 <-
     """
 
     def __init__(self, numSpkrs, p_dropout):
