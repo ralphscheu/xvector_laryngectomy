@@ -56,9 +56,8 @@ if __name__ == "__main__":
         sys.exit(1)
 
     # Load model definition
-    if args.modelType == 'xvector':
+    if args.modelType == 'xvector' or args.modelType == 'xvector-ams':
         net = xvector(args.numSpkrs, p_dropout=0)
-        # TODO: add option for Additive-Margin Softmax variant
 
     checkpoint = torch.load(modelFile,map_location=torch.device('cuda'))
     new_state_dict = OrderedDict()
