@@ -242,7 +242,7 @@ if [ $stage -eq 7 ]; then
   echo "Stage $stage: Train the model"
 
   CUDA_VISIBLE_DEVICES=$cuda_device_id \
-    $train_cmd logs/${modelType}__$(date -u '+%Y%m%dT%H%M%S')/train.log \
+    $train_cmd logs/${modelType}__$(date '+%Y%m%dT%H%M%S')/train.log \
       python -m torch.distributed.launch --nproc_per_node=$nproc \
         local/torch_xvector/train.py \
           --modelType $modelType \
@@ -302,7 +302,7 @@ if [ $stage -eq 9 ]; then
       "ark:ivector-subtract-global-mean $trainXvecDir/mean.vec scp:$testXvecDir/xvector.scp ark:- | transform-vec $trainXvecDir/transform.mat ark:- ark:- |" \
       ark,scp:$testXvecDir/xvec_for_plot.ark,$testXvecDir/xvec_for_plot.scp
 
-  python local/plot_xvec.py $testXvecDir/xvec_for_plot.scp voxceleb1_test ./plots --dim-reduction-method=tsne
+  python local/plot_xvec.py $testXvecDir/xvec_for_plot.scp voxceleb1_test ./plots
 
 fi
 
