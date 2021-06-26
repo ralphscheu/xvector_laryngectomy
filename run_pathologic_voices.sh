@@ -77,4 +77,6 @@ $train_cmd logs/$nnet_name/pathologic_voices/normalize_xvectors.log \
 
 echo "Plot embeddings..."
 $train_cmd logs/$nnet_name/pathologic_voices/plot_xvectors.log \
-    python local/pathologic_voices/plot_xvectors.py $nnet_name `pwd`/xvectors/$nnet_name/_plots
+    python local/pathologic_voices/plot_xvectors.py \
+        --output-dir `pwd`/xvectors/$nnet_name/_plots \
+        $nnet_name

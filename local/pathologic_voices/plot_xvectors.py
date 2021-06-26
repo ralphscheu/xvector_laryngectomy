@@ -111,7 +111,7 @@ def plot_scores(pathovoices_emb, score_col, title, output_dir, annotate=False):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('nnet_name', help='nnet name')
-    parser.add_argument('--output_dir', default='./plots', help='directory to save plot into')
+    parser.add_argument('--output-dir', default='./plots', help='directory to save plot into')
     args = parser.parse_args()
 
 
