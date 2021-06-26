@@ -52,7 +52,7 @@ pd.plotting.scatter_matrix(mean_scores_ctrl, figsize=(10,10))
 plt.savefig('ctrl_allscores_matrix.png')
 
 # visualize scores stats
-plot_scores_histograms(mean_scores_laryng, mean_scores_partres, mean_scores_ctrl)
+plot_scores_histograms(mean_scores_laryng, mean_scores_partres)
 
 
 print("created all plots.")

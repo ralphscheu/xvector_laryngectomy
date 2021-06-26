@@ -27,9 +27,9 @@ def get_mean_scores(f_crits, f_scores):
     return mean_scores
 
 
-def plot_scores_histograms(scores_laryng, scores_partres, scores_ctrl):
-    fig, axes = plt.subplots(nrows=3, ncols=3)
-    plt.subplots_adjust(wspace=.6, hspace=.5)
+def plot_scores_histograms(scores_laryng, scores_partres):
+    fig, axes = plt.subplots(nrows=2, ncols=3, figsize=(10, 5))
+    plt.subplots_adjust(wspace=.4, hspace=.4)
     axes[0, 0].set_title("laryng effort")
     scores_laryng['effort'].plot.hist(alpha=0.5, ax=axes[0,0])
     axes[0, 1].set_title("laryng intell")
@@ -43,12 +43,5 @@ def plot_scores_histograms(scores_laryng, scores_partres, scores_ctrl):
     scores_partres['intell'].plot.hist(alpha=0.5, ax=axes[1,1])
     axes[1, 2].set_title("partres overall")
     scores_partres['overall'].plot.hist(alpha=0.5, ax=axes[1,2])
-
-    axes[2, 0].set_title("ctrl effort")
-    scores_ctrl['effort'].plot.hist(alpha=0.5, ax=axes[2,0])
-    axes[2, 1].set_title("ctrl intell")
-    scores_ctrl['intell'].plot.hist(alpha=0.5, ax=axes[2,1])
-    axes[2, 2].set_title("ctrl overall")
-    scores_ctrl['overall'].plot.hist(alpha=0.5, ax=axes[2,2])
 
     save_plot("plots", "scores_hist")
