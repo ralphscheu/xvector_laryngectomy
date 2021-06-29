@@ -63,7 +63,7 @@ def run_pytorch_model(title, df, model, criterion=torch.nn.L1Loss(), lr=1e-5, nu
 
             y_preds = []
             y_tests = []
-            fold_results = {'mse': {}, 'mae': {}, 'train_loss': {}}
+            fold_results = {'mse': {}, 'mae': {}, 'train_loss': {}, 'test_loss': {}}
             for fold, (train_ids, test_ids) in enumerate( LeaveOneOut().split(X) ):
                 # generate train and test portion, scale X_train, X_test according to X_train mean+std
                 xscaler = StandardScaler()
@@ -74,7 +74,7 @@ def run_pytorch_model(title, df, model, criterion=torch.nn.L1Loss(), lr=1e-5, nu
 
                 optimizer = torch.optim.SGD(model.parameters(), lr=lr)
 
-                train_loss = []
+                train_loss, test_loss = [], []
                 # Run the training loop for defined number of epochs
                 for epoch in range(0, num_epochs):
                     loss = criterion(model(X_train), y_train)
@@ -83,6 +83,7 @@ def run_pytorch_model(title, df, model, criterion=torch.nn.L1Loss(), lr=1e-5, nu
                     optimizer.zero_grad()
 
                     train_loss.append(loss.item())
+                    test_loss.append(mean_absolute_error(model(X_test).detach().numpy(), y_test.detach().numpy()))
 
                 # evaluate on test
                 model.eval()
@@ -99,6 +100,7 @@ def run_pytorch_model(title, df, model, criterion=torch.nn.L1Loss(), lr=1e-5, nu
                 fold_results['mae'][fold] = mae
 
                 fold_results['train_loss'][fold] = train_loss
+                fold_results['test_loss'][fold] = test_loss
             
             y_preds = np.concatenate(y_preds)
             y_tests = np.concatenate(y_tests)
@@ -124,7 +126,8 @@ def run_pytorch_model(title, df, model, criterion=torch.nn.L1Loss(), lr=1e-5, nu
                 'avg_mse': sum_mse / len(fold_results['mse'].items()), 
                 'avg_mae': sum_mae / len(fold_results['mae'].items()), 
                 'pearson_r': r, 'p_value': pvalue, 'r2': r2,
-                'train_loss_folds': fold_results['train_loss']
+                'train_loss_folds': fold_results['train_loss'],
+                'test_loss_folds': fold_results['test_loss']
                 }, ignore_index=True)
 
             if print_results:
@@ -256,8 +259,8 @@ if __name__ == "__main__":
 
     ### PyTorch models
 
-    for _num_epochs in [200, 500]:
-        for lr in [1e-3, 1e-4]:
+    for _num_epochs in [100, 300]:
+        for lr in [1e-4, 1e-5]:
 
             all_results = all_results.append( run_pytorch_model(
                 "LinearModel", df, 
