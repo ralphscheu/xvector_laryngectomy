@@ -16,3 +16,4 @@ models/
 plots/
 *.xlsx
 .ipynb_checkpoints
+*.eps
