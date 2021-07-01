@@ -9,8 +9,9 @@ def save_plot(output_dir, filename):
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
     timestamp = datetime.now().strftime('%Y%m%dT%H%M%S')
-    save_filepath = '{}/{}__{}.png'.format(output_dir, timestamp, filename)
-    plt.savefig(save_filepath, bbox_inches='tight')
+    save_filepath = '{}/{}__{}'.format(output_dir, timestamp, filename)
+    plt.savefig(save_filepath + ".png", bbox_inches='tight')
+    plt.savefig(save_filepath + ".eps", format='eps', bbox_inches='tight')
     print("Saved plot to {}".format( save_filepath ))
 
 
@@ -27,21 +28,22 @@ def get_mean_scores(f_crits, f_scores):
     return mean_scores
 
 
-def plot_scores_histograms(scores_laryng, scores_partres):
-    fig, axes = plt.subplots(nrows=2, ncols=3, figsize=(10, 5))
-    plt.subplots_adjust(wspace=.4, hspace=.4)
-    axes[0, 0].set_title("laryng effort")
-    scores_laryng['effort'].plot.hist(alpha=0.5, ax=axes[0,0])
-    axes[0, 1].set_title("laryng intell")
-    scores_laryng['intell'].plot.hist(alpha=0.5, ax=axes[0,1])
-    axes[0, 2].set_title("laryng overall")
-    scores_laryng['overall'].plot.hist(alpha=0.5, ax=axes[0,2])
+def plot_scores_histograms(scores_laryng, scores_partres, bar_color='white', edgecolor='black', hatch='xxxx'):
+    fig, axes = plt.subplots(nrows=3, ncols=2, figsize=(6, 8))
+    plt.subplots_adjust(wspace=.32, hspace=.32)
 
-    axes[1, 0].set_title("partres effort")
-    scores_partres['effort'].plot.hist(alpha=0.5, ax=axes[1,0])
-    axes[1, 1].set_title("partres intell")
-    scores_partres['intell'].plot.hist(alpha=0.5, ax=axes[1,1])
-    axes[1, 2].set_title("partres overall")
-    scores_partres['overall'].plot.hist(alpha=0.5, ax=axes[1,2])
+    axes[0,0].set_title("laryng intell")
+    scores_laryng['intell'].plot.hist(alpha=0.5, ax=axes[0,0], color=bar_color, edgecolor=edgecolor, hatch=hatch)
+    axes[1,0].set_title("laryng overall")
+    scores_laryng['overall'].plot.hist(alpha=0.5, ax=axes[1,0], color=bar_color, edgecolor=edgecolor, hatch=hatch)
+    axes[2,0].set_title("laryng effort")
+    scores_laryng['effort'].plot.hist(alpha=0.5, ax=axes[2,0], color=bar_color, edgecolor=edgecolor, hatch=hatch)
+
+    axes[0,1].set_title("partres intell")
+    scores_partres['intell'].plot.hist(alpha=0.5, ax=axes[0,1], color=bar_color, edgecolor=edgecolor, hatch=hatch)
+    axes[1,1].set_title("partres overall")
+    scores_partres['overall'].plot.hist(alpha=0.5, ax=axes[1,1], color=bar_color, edgecolor=edgecolor, hatch=hatch)
+    axes[2,1].set_title("partres effort")
+    scores_partres['effort'].plot.hist(alpha=0.5, ax=axes[2,1], color=bar_color, edgecolor=edgecolor, hatch=hatch)
 
     save_plot("plots", "scores_hist")
