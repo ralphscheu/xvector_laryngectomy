@@ -44,7 +44,7 @@ class NonlinearRegressionModel(nn.Module):
         return x
 
 
-def run_pytorch_model(title, df, model, criterion=torch.nn.L1Loss(), lr=1e-5, num_epochs=100, k_folds=10, print_results=False):
+def run_pytorch_model(title, df, model_class, criterion=torch.nn.L1Loss(), lr=1e-5, num_epochs=100, k_folds=10, print_results=False):
     """ fit and evaluate a pytorch regression model """
 
     print(f"running {title}...")
@@ -59,7 +59,7 @@ def run_pytorch_model(title, df, model, criterion=torch.nn.L1Loss(), lr=1e-5, nu
 
             dataset = df.loc[df.speaker_group.isin(sel_speaker_groups)]
             X = np.vstack(dataset.embedding)
-            y = dataset[crit].values#.reshape((-1, 1))
+            y = dataset[crit].values
 
             y_preds = []
             y_tests = []
@@ -67,28 +67,33 @@ def run_pytorch_model(title, df, model, criterion=torch.nn.L1Loss(), lr=1e-5, nu
             for fold, (train_ids, test_ids) in enumerate( LeaveOneOut().split(X) ):
                 # generate train and test portion, scale X_train, X_test according to X_train mean+std
                 xscaler = StandardScaler()
-                X_train = torch.Tensor( xscaler.fit_transform( X[train_ids] ) )
-                X_test =  torch.Tensor( xscaler.transform( X[test_ids] ) )
-                y_train = torch.Tensor( y[train_ids] ).view(-1, 1)
+                X_train = torch.Tensor( xscaler.fit_transform( X[train_ids] ) ).to("cuda")
+                X_test =  torch.Tensor( xscaler.transform( X[test_ids] ) ).to("cuda")
+                y_train = torch.Tensor( y[train_ids] ).view(-1, 1).to("cuda")
                 y_test =  torch.Tensor( y[test_ids] ).view(-1, 1)
 
+                model = model_class().to("cuda")
                 optimizer = torch.optim.SGD(model.parameters(), lr=lr)
 
                 train_loss, test_loss = [], []
                 # Run the training loop for defined number of epochs
-                for epoch in range(0, num_epochs):
+                for _ in range(0, num_epochs):
+                    model.train()
                     loss = criterion(model(X_train), y_train)
                     loss.backward()
                     optimizer.step()
                     optimizer.zero_grad()
 
                     train_loss.append(loss.item())
-                    test_loss.append(mean_absolute_error(model(X_test).detach().numpy(), y_test.detach().numpy()))
+
+                    model.eval()
+                    with torch.no_grad():
+                        test_loss.append(mean_absolute_error(model(X_test).cpu(), y_test))
 
                 # evaluate on test
                 model.eval()
                 with torch.no_grad():
-                    y_pred = model(X_test)
+                    y_pred = model(X_test).cpu()
 
                 y_preds.append( y_pred.ravel() )
                 y_tests.append( y_test.ravel() )
@@ -146,7 +151,7 @@ def run_pytorch_model(title, df, model, criterion=torch.nn.L1Loss(), lr=1e-5, nu
     return results
 
 
-def run_sklearn_model(title, model, df, print_results=False):
+def run_sklearn_model(title, model_class, df, kernel=None, print_results=False):
     """ fit and evaluate a sklearn regressor """
 
     print(f"running {title}...")
@@ -167,11 +172,16 @@ def run_sklearn_model(title, model, df, print_results=False):
             for fold, (train_ids, test_ids) in enumerate( LeaveOneOut().split(X) ):
                 X_train = X[train_ids]
                 y_train = y[train_ids]
-
                 X_test = X[test_ids]
                 y_test = y[test_ids]
 
-                regr = model
+                if kernel is not None:
+                    # SVR -> configure kernel
+                    regr = model_class(kernel=kernel)
+                else:
+                    # other models
+                    regr = model_class()
+                
                 regr.fit(X_train, y_train)
 
                 y_pred = regr.predict(X_test)
@@ -244,32 +254,32 @@ if __name__ == "__main__":
     ### sklearn models
 
     all_results = all_results.append( run_sklearn_model(
-        "Linear Regression", sklearn.linear_model.LinearRegression(), df), ignore_index=True)
+        "Linear Regression", sklearn.linear_model.LinearRegression, df), ignore_index=True)
 
     all_results = all_results.append( run_sklearn_model(
-        "SVR [linear]", sklearn.svm.SVR(kernel='linear'), df), ignore_index=True)
+        "SVR [linear]", sklearn.svm.SVR, df, kernel='linear'), ignore_index=True)
     all_results = all_results.append( run_sklearn_model(
-        "SVR [poly]", sklearn.svm.SVR(kernel='poly'), df), ignore_index=True)
+        "SVR [poly]", sklearn.svm.SVR, df, kernel='poly'), ignore_index=True)
     all_results = all_results.append( run_sklearn_model(
-        "SVR [rbf]", sklearn.svm.SVR(kernel='rbf'), df), ignore_index=True)
+        "SVR [rbf]", sklearn.svm.SVR, df, kernel='rbf'), ignore_index=True)
     
     all_results = all_results.append( run_sklearn_model(
-        "Random Forest Regressor", sklearn.ensemble.RandomForestRegressor(), df), ignore_index=True)
+        "Random Forest Regressor", sklearn.ensemble.RandomForestRegressor, df), ignore_index=True)
 
 
     ### PyTorch models
 
-    for _num_epochs in [100, 300]:
-        for lr in [1e-4, 1e-5]:
+    for _num_epochs in [50, 100, 200]:
+        for lr in [1e-2, 1e-3, 1e-4]:
 
             all_results = all_results.append( run_pytorch_model(
                 "LinearModel", df, 
-                LinearModel(), criterion=torch.nn.L1Loss(), lr=lr, num_epochs=_num_epochs
+                LinearModel, criterion=torch.nn.L1Loss(), lr=lr, num_epochs=_num_epochs
                 ), ignore_index=True)
 
             all_results = all_results.append( run_pytorch_model(
                 "Feed-forward", df, 
-                NonlinearRegressionModel(), criterion=torch.nn.L1Loss(), lr=lr, num_epochs=_num_epochs
+                NonlinearRegressionModel, criterion=torch.nn.L1Loss(), lr=lr, num_epochs=_num_epochs
                 ), ignore_index=True)
     
 
