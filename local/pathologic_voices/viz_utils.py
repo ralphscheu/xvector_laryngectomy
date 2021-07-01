@@ -15,9 +15,16 @@ def save_plot(output_dir, filename):
     print("Saved plot to {}".format( save_filepath ))
 
 
-def parse_ages(filename):
+def parse_ages(filename_laryng, filename_partres, filename_ctrl):
     """ parse ages labels file into dictionary """
-    return pd.read_table(filename, names=['utt', 'age'])
+    ages_laryng = pd.read_table(filename_laryng, names=['utt', 'age'])
+    
+    ages_partres = pd.read_table(filename_partres, names=['utt', 'age_years_months', 'age'])[['utt', 'age']]
+    
+    ages_ctrl_cols = pd.read_table(filename_ctrl+".cols", header=None, squeeze=True)
+    ages_ctrl = pd.read_csv(filename_ctrl+".values", sep=',', names=ages_ctrl_cols).rename(columns={'file':'utt'})
+
+    return {'laryng': ages_laryng, 'partres': ages_partres, 'ctrl': ages_ctrl}
 
 
 def get_mean_scores(f_crits, f_scores):
