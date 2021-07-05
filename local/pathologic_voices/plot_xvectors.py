@@ -27,11 +27,11 @@ def plot_speakergroups(pathovoices_emb, title, output_dir, annotate_outliers=Fal
         figsize = (22, 22)
     fig = plt.figure(figsize=figsize)
     ax = fig.add_subplot(1,1,1) 
-    ax.set_title(title)
+    # ax.set_title(title)
 
     x_LARY = pathovoices_emb.loc[pathovoices_emb.speaker_group == 'LARY']
     embeddings_laryng = np.vstack(x_LARY.embedding.values)
-    ax.scatter(embeddings_laryng[:,0], embeddings_laryng[:,1], c='tab:red', label='laryng', s=pointsize)
+    ax.scatter(embeddings_laryng[:,0], embeddings_laryng[:,1], c='tab:red', label='TL', s=pointsize)
     if annotate_outliers:
         for _, row in get_outliers(x_LARY).iterrows():
             ax.annotate(row.utt, row.embedding)
@@ -41,14 +41,14 @@ def plot_speakergroups(pathovoices_emb, title, output_dir, annotate_outliers=Fal
         embeddings_PARE = np.vstack(x_PARE.embedding.values)
         if x_PARE.size == 0:
             sys.exit("No x-vectors found for PARE!")
-        ax.scatter(embeddings_PARE[:,0], embeddings_PARE[:,1], c='tab:olive', label='partres', s=pointsize)
+        ax.scatter(embeddings_PARE[:,0], embeddings_PARE[:,1], c='tab:olive', label='PL', s=pointsize)
         if annotate_outliers:
             for _, row in get_outliers(x_PARE).iterrows():
                 ax.annotate(row.utt, row.embedding)
 
     x_CTRL = pathovoices_emb.loc[pathovoices_emb.speaker_group == 'CTRL']
     embeddings_laryng = np.vstack(x_CTRL.embedding.values)
-    ax.scatter(embeddings_laryng[:,0], embeddings_laryng[:,1], c='tab:blue', label='ctrl', s=pointsize)
+    ax.scatter(embeddings_laryng[:,0], embeddings_laryng[:,1], c='tab:blue', label='CTRL', s=pointsize)
     if annotate_outliers:
         for _, row in get_outliers(x_CTRL).iterrows():
             ax.annotate(row.utt, row.embedding)
@@ -59,7 +59,7 @@ def plot_speakergroups(pathovoices_emb, title, output_dir, annotate_outliers=Fal
         embeddings_VOXCELEB = np.vstack(x_VOXCELEB.embedding.values)
         if embeddings_VOXCELEB.shape[0] == 0:
             sys.exit("No x-vectors found for VOXCELEB!")
-        ax.scatter(embeddings_VOXCELEB[:,0], embeddings_VOXCELEB[:,1], c='tab:orange', label='voxceleb', s=pointsize)
+        ax.scatter(embeddings_VOXCELEB[:,0], embeddings_VOXCELEB[:,1], c='tab:orange', label='VOXCELEB', s=pointsize)
    
     plt.axis('off')
     ax.legend(fontsize=28)
@@ -149,7 +149,7 @@ if __name__ == "__main__":
     voxceleb_emb = voxceleb_emb.sample(30, random_state=0)
     pathovoices_voxceleb = pd.concat([pathovoices_emb_original, voxceleb_emb], axis=0)
     pathovoices_voxceleb.embedding = list( TSNE(n_components=2).fit_transform( np.vstack(pathovoices_voxceleb.embedding.values) ) )
-    plot_speakergroups(pathovoices_voxceleb, f"pathovoices__laryng_partres_ctrl_voxceleb", args.output_dir, include_VOXCELEB=True, include_PARE=True)
+    plot_speakergroups(pathovoices_voxceleb, "pathovoices__laryng_partres_ctrl_voxceleb", args.output_dir, include_VOXCELEB=True, include_PARE=True)
 
 
     # color embeddings based on scores
