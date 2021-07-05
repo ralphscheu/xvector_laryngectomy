@@ -11,6 +11,7 @@ cuda_device_id=0  # default to first GPU in system
 
 modelDir=`pwd`/models/$nnet_name
 trainXvecDir=`pwd`/xvectors/$nnet_name/train
+testXvecDir=`pwd`/xvectors/$nnet_name/test
 pathovoicesXvecDir=`pwd`/xvectors/$nnet_name/pathologic_voices
 
 dataset_name=pathologic_voices_CTRL_PARE_LARY
@@ -58,25 +59,15 @@ $train_cmd logs/$dataset_name/prepare_feats_for_egs.log \
         $data_dir ${data_dir}_no_sil exp/${dataset_name}_no_sil
 utils/fix_data_dir.sh ${data_dir}_no_sil
 
-
-#########################################
-#########################################
-
-
 echo "Extract embeddings..."
 $train_cmd logs/$nnet_name/pathologic_voices/extract_xvectors.log \
     CUDA_VISIBLE_DEVICES=$cuda_device_id \
         python local/torch_xvector/extract.py $modelDir ${data_dir}_no_sil $pathovoicesXvecDir \
             --modelType $model_type
 
-echo "Normalize embeddings..."
-$train_cmd logs/$nnet_name/pathologic_voices/normalize_xvectors.log \
-    ivector-normalize-length \
-        "ark:ivector-subtract-global-mean $trainXvecDir/mean.vec scp:$pathovoicesXvecDir/xvector.scp ark:- | transform-vec $trainXvecDir/transform.mat ark:- ark:- |" \
-        ark,scp:$pathovoicesXvecDir/xvector_normalized.ark,$pathovoicesXvecDir/xvector_normalized.scp
-
 echo "Plot embeddings..."
 $train_cmd logs/$nnet_name/pathologic_voices/plot_xvectors.log \
     python local/pathologic_voices/plot_xvectors.py \
-        --output-dir `pwd`/xvectors/$nnet_name/_plots \
-        $nnet_name
+        "ark:ivector-subtract-global-mean $trainXvecDir/mean.vec scp:$pathovoicesXvecDir/xvector.scp ark:- | transform-vec $trainXvecDir/transform.mat ark:- ark:- | ivector-normalize-length ark:- ark:- |" \
+        "ark:ivector-subtract-global-mean $trainXvecDir/mean.vec scp:$testXvecDir/xvector.scp ark:- | transform-vec $trainXvecDir/transform.mat ark:- ark:- | ivector-normalize-length ark:- ark:- |" \
+        --output-dir `pwd`/xvectors/$nnet_name/_plots

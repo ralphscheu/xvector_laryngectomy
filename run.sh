@@ -295,15 +295,9 @@ if [ $stage -eq 9 ]; then
     "ark:ivector-subtract-global-mean scp:$trainXvecDir/xvector.scp ark:- | transform-vec $trainXvecDir/transform.mat ark:- ark:- | ivector-normalize-length ark:-  ark:- |" \
     $trainXvecDir/plda
 
-  
-  
-  $train_cmd $testXvecDir/log/save_xvec_for_plot.log \
-    ivector-normalize-length \
-      "ark:ivector-subtract-global-mean $trainXvecDir/mean.vec scp:$testXvecDir/xvector.scp ark:- | transform-vec $trainXvecDir/transform.mat ark:- ark:- |" \
-      ark,scp:$testXvecDir/xvec_for_plot.ark,$testXvecDir/xvec_for_plot.scp
-
-  python local/plot_xvec.py $testXvecDir/xvec_for_plot.scp voxceleb1_test ./plots
-
+  python local/plot_xvec.py \
+    "ark:ivector-subtract-global-mean $trainXvecDir/mean.vec scp:$testXvecDir/xvector.scp ark:- | transform-vec $trainXvecDir/transform.mat ark:- ark:- | ivector-normalize-length ark:- ark:- |" \
+    voxceleb1_test
 fi
 
 
